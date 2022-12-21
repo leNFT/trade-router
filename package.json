@@ -18,5 +18,6 @@
   "homepage": "https://github.com/leNFT/swap-router#readme",
   "dependencies": {
     "express": "^4.18.2"
-  }
+  },
+  "keywords": []
 }
