@@ -2,7 +2,7 @@ import { Alchemy, Network } from "alchemy-sdk";
 import contractAddresses from "./contractAddresses.json" assert { type: "json" };
 import { BigNumber } from "@ethersproject/bignumber";
 import { utils } from "ethers";
-import tradingPoolABI from "./contracts/TradingPool.json" assert { type: "json" };
+import tradingPoolContract from "./contracts/TradingPool.json" assert { type: "json" };
 import { Heap } from "heap-js";
 import dotenv from "dotenv";
 dotenv.config();
@@ -108,7 +108,7 @@ export async function setInitialState(chainId) {
   console.log("lps", lps);
 
   // Get liquidity positions for each pool to build heaps
-  const iface = new utils.Interface(tradingPoolABI);
+  const iface = new utils.Interface(tradingPoolContract.abi);
   for (let i = 0; i < tradingPools.length; i++) {
     const tradingPool = tradingPools[i];
     for (let u = 0; u < lps[tradingPool].length; u++) {

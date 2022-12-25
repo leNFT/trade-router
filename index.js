@@ -53,47 +53,50 @@ app.get("/buy", async (req, res) => {
   var price = 0;
 
   // Clone the heap so we can change it freely
-  var minHeap = minHeaps[pool].clone();
+  if (minHeaps[pool]) {
+    var minHeap = minHeaps[pool].clone();
 
-  while (selectedLps.length < buyAmount) {
-    // if the lp with the lowest price has enough liquidity we add it to the response
-    var minLp = minHeap.pop();
-    if (minLp === undefined) {
-      break;
-    }
-    if (minLp.nfts.length > 0) {
-      selectedLps.push(minLp.id);
-      price += minLp.price;
-      exampleNFTs.push(
-        BigNumber.from(minLp.nfts[minLp.nfts.length - 1]).toNumber()
-      );
+    while (selectedLps.length < buyAmount) {
+      // if the lp with the lowest price has enough liquidity we add it to the response
+      var minLp = minHeap.pop();
+      if (minLp === undefined) {
+        break;
+      }
+      if (minLp.nfts.length > 0) {
+        selectedLps.push(minLp.id);
+        price += minLp.price;
+        exampleNFTs.push(
+          BigNumber.from(minLp.nfts[minLp.nfts.length - 1]).toNumber()
+        );
 
-      // Add lp with update buy price to min lp
-      // Get buy price and add it to the heap
-      const getPriceAfterBuyResponse = await alchemy.core.call({
-        to: minLp.curve,
-        data:
-          priceAfterBuyFunctionSig +
-          utils.defaultAbiCoder.encode(["uint256"], [minLp.price]).slice(2) +
-          utils.defaultAbiCoder
-            .encode(["uint256"], [BigNumber.from(minLp.delta).toString()])
-            .slice(2),
-      });
+        // Add lp with update buy price to min lp
+        // Get buy price and add it to the heap
+        const getPriceAfterBuyResponse = await alchemy.core.call({
+          to: minLp.curve,
+          data:
+            priceAfterBuyFunctionSig +
+            utils.defaultAbiCoder.encode(["uint256"], [minLp.price]).slice(2) +
+            utils.defaultAbiCoder
+              .encode(["uint256"], [BigNumber.from(minLp.delta).toString()])
+              .slice(2),
+        });
 
-      const nextBuyPrice = utils.defaultAbiCoder
-        .decode(["uint256"], getPriceAfterBuyResponse)[0]
-        .toNumber();
-      console.log("nextBuyPrice", nextBuyPrice);
-      minHeaps[pool].push({
-        id: minLp.id,
-        price: nextBuyPrice,
-        curve: minLp.curve,
-        delta: BigNumber.from(minLp.delta).toNumber(),
-        tokenAmount: BigNumber.from(minLp.tokenAmount).toString(),
-        nfts: minLp.nfts.slice(0, -1),
-      });
+        const nextBuyPrice = utils.defaultAbiCoder
+          .decode(["uint256"], getPriceAfterBuyResponse)[0]
+          .toNumber();
+        console.log("nextBuyPrice", nextBuyPrice);
+        minHeaps[pool].push({
+          id: minLp.id,
+          price: nextBuyPrice,
+          curve: minLp.curve,
+          delta: BigNumber.from(minLp.delta).toNumber(),
+          tokenAmount: BigNumber.from(minLp.tokenAmount).toString(),
+          nfts: minLp.nfts.slice(0, -1),
+        });
+      }
     }
   }
+
   res.send({ lps: selectedLps, price: price, exampleNFTs: exampleNFTs });
 });
 
@@ -107,44 +110,47 @@ app.get("/sell", async (req, res) => {
   var selectedLps = [];
   var price = 0;
   // Clone the heap so we can change it freely
-  var maxHeap = maxHeaps[pool].clone();
+  if (maxHeap[pool]) {
+    var maxHeap = maxHeaps[pool].clone();
 
-  while (selectedLps.length < sellAmount) {
-    // if the lp with the lowest price has enough liquidity we add it to the response
-    const maxLp = maxHeap.pop();
-    if (maxLp === undefined) {
-      break;
-    }
-    if (maxLp.tokenAmount > maxLp.price) {
-      selectedLps.push(maxLp.id);
-      price += maxLp.price;
+    while (selectedLps.length < sellAmount) {
+      // if the lp with the lowest price has enough liquidity we add it to the response
+      const maxLp = maxHeap.pop();
+      if (maxLp === undefined) {
+        break;
+      }
+      if (maxLp.tokenAmount > maxLp.price) {
+        selectedLps.push(maxLp.id);
+        price += maxLp.price;
 
-      // Add lp with update buy price to min lp
-      // Get buy price and add it to the heap
-      const getPriceAfterSellResponse = await alchemy.core.call({
-        to: maxLp.curve,
-        data:
-          priceAfterSellFunctionSig +
-          utils.defaultAbiCoder.encode(["uint256"], [maxLp.price]).slice(2) +
-          utils.defaultAbiCoder
-            .encode(["uint256"], [BigNumber.from(maxLp.delta).toString()])
-            .slice(2),
-      });
+        // Add lp with update buy price to min lp
+        // Get buy price and add it to the heap
+        const getPriceAfterSellResponse = await alchemy.core.call({
+          to: maxLp.curve,
+          data:
+            priceAfterSellFunctionSig +
+            utils.defaultAbiCoder.encode(["uint256"], [maxLp.price]).slice(2) +
+            utils.defaultAbiCoder
+              .encode(["uint256"], [BigNumber.from(maxLp.delta).toString()])
+              .slice(2),
+        });
 
-      const nextSellPrice = utils.defaultAbiCoder
-        .decode(["uint256"], getPriceAfterSellResponse)[0]
-        .toNumber();
-      console.log("nextSellPrice", nextSellPrice);
-      minHeaps[pool].push({
-        id: maxLp.id,
-        price: nextSellPrice,
-        curve: maxLp.curve,
-        delta: BigNumber.from(maxLp.delta).toNumber(),
-        tokenAmount: BigNumber.from(maxLp.tokenAmount).toString(),
-        nfts: maxLp.nfts.slice(0, -1),
-      });
+        const nextSellPrice = utils.defaultAbiCoder
+          .decode(["uint256"], getPriceAfterSellResponse)[0]
+          .toNumber();
+        console.log("nextSellPrice", nextSellPrice);
+        minHeaps[pool].push({
+          id: maxLp.id,
+          price: nextSellPrice,
+          curve: maxLp.curve,
+          delta: BigNumber.from(maxLp.delta).toNumber(),
+          tokenAmount: BigNumber.from(maxLp.tokenAmount).toString(),
+          nfts: maxLp.nfts.slice(0, -1),
+        });
+      }
     }
   }
+
   res.send({ lps: selectedLps, price: price });
 });
 
