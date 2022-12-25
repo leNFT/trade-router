@@ -48,6 +48,7 @@ app.get("/buy", async (req, res) => {
   const pool = req.query["pool"];
   const priceAfterBuyFunctionSig = "0xbb1690e2";
   var selectedLps = [];
+  var exampleNFTs = [];
   var price = 0;
 
   // Clone the heap so we can change it freely
@@ -62,6 +63,7 @@ app.get("/buy", async (req, res) => {
     if (minLp.nfts.length > 0) {
       selectedLps.push(minLp.id);
       price += minLp.price;
+      exampleNFTs.push(minLp.nfts.pop());
 
       // Add lp with update buy price to min lp
       // Get buy price and add it to the heap
@@ -85,11 +87,11 @@ app.get("/buy", async (req, res) => {
         curve: minLp.curve,
         delta: BigNumber.from(minLp.delta).toNumber(),
         tokenAmount: BigNumber.from(minLp.tokenAmount).toString(),
-        nfts: minLp.nfts.slice(0, -1),
+        nfts: minLp.nfts,
       });
     }
   }
-  res.send({ lps: selectedLps, price: price });
+  res.send({ lps: selectedLps, price: price, exampleNFTs: exampleNFTs });
 });
 
 // Setup sell router endpoint
