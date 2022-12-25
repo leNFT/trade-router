@@ -34,6 +34,7 @@ export async function setInitialState(chainId) {
   const removeLiquidityTopic =
     "0xf9e7f47c2cd7655661046fbcf0164a4d4ac48c3cd9c0ed8b45410e965cc33714";
   const priceAfterBuyFunctionSig = "0xbb1690e2";
+  const getLpFunctionSig = "0xcdd3f298";
 
   // Get all the pools addresses
   const createTradingPoolResponse = await alchemy.core.getLogs({
@@ -57,7 +58,6 @@ export async function setInitialState(chainId) {
   }
 
   console.log("tradingPools", tradingPools);
-  console.log("maxHeaps", maxHeaps);
 
   //Get info about LPs of each pool
   for (let i = 0; i < tradingPools.length; i++) {
@@ -105,49 +105,64 @@ export async function setInitialState(chainId) {
     }
   }
 
+  console.log("lps", lps);
+
   // Get liquidity positions for each pool to build heaps
   const iface = new utils.Interface(tradingPoolABI);
   for (let i = 0; i < tradingPools.length; i++) {
     const tradingPool = tradingPools[i];
     for (let u = 0; u < lps[tradingPool].length; u++) {
-      const lpId = lps[u];
+      const lpId = lps[tradingPool][u];
 
       const getLpResponse = await alchemy.core.call({
-        to: pool,
+        to: tradingPool,
         data:
           getLpFunctionSig +
-          ethers.utils.defaultAbiCoder.encode(["uint256"], lpId).slice(2),
+          utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
       });
 
-      console.log("getLpResponse", getLpResponse);
       const lp = iface.decodeFunctionResult("getLP", getLpResponse);
+      console.log("lp", lp);
 
-      // Get sell price and add it to the max heap
-      const sellPrice = lp.price;
-      maxHeaps.push({ id: lpId, price: sellPrice });
+      // Get current (sell) price and add it to the max heap
+      const currentPrice = BigNumber.from(lp[0].price).toNumber();
+      console.log("currentPrice", currentPrice);
+      maxHeaps[tradingPool].push({
+        id: lpId,
+        price: currentPrice,
+        curve: lp[0].curve,
+        delta: BigNumber.from(lp[0].delta).toNumber(),
+        tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
+        nfts: lp[0].nftIds,
+      });
 
       // Get buy price and add it to the heap
       const getPriceAfterBuyResponse = await alchemy.core.call({
-        to: lp.curve,
+        to: lp[0].curve,
         data:
           priceAfterBuyFunctionSig +
-          ethers.utils.defaultAbiCoder
-            .encode(["uint256"], [lp.price])
-            .slice(2) +
-          ethers.utils.defaultAbiCoder
-            .encode(["uint256"], [lp[0].delta.toString()])
+          utils.defaultAbiCoder.encode(["uint256"], [currentPrice]).slice(2) +
+          utils.defaultAbiCoder
+            .encode(["uint256"], [BigNumber.from(lp[0].delta).toString()])
             .slice(2),
       });
-      const buyPrice = ethers.utils.defaultAbiCoder
-        .decode(["uint256"], getPriceAfterBuyResponse)
-        .toString();
-      minHeaps.push({ id: lpId, price: buyPrice });
+
+      const buyPrice = utils.defaultAbiCoder
+        .decode(["uint256"], getPriceAfterBuyResponse)[0]
+        .toNumber();
+      console.log("buyPrice", buyPrice);
+      minHeaps[tradingPool].push({
+        id: lpId,
+        price: buyPrice,
+        curve: lp[0].curve,
+        delta: BigNumber.from(lp[0].delta).toNumber(),
+        tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
+        nfts: lp[0].nftIds,
+      });
     }
   }
 
   console.log("lps", lps);
-  console.log("minHeaps", minHeaps);
-  console.log("maxHeaps", maxHeaps);
 
-  return { maxHeaps, minHeaps };
+  return { tradingPools, maxHeaps, minHeaps };
 }
