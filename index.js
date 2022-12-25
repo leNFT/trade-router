@@ -6,7 +6,7 @@ import { Heap } from "heap-js";
 import contractAddresses from "./contractAddresses.json" assert { type: "json" };
 import express from "express";
 import Cors from "cors";
-import initMiddleware from "./lib/init-middleware";
+import initMiddleware from "./lib/init-middleware.js";
 const app = express();
 const port = 8080;
 const alchemySettings = {
