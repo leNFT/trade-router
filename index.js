@@ -168,8 +168,6 @@ function createNewTradingPoolSubscription() {
 
   alchemy.ws.on(newTradingPoolsFilter, (log, event) => {
     // Emitted whenever a new trading pool is created
-    console.log("log", log);
-
     const tradingPool = utils.defaultAbiCoder.decode(
       ["address"],
       log.topics[1]
