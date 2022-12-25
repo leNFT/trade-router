@@ -37,7 +37,8 @@ const cors = initMiddleware(
 // Set up subscriptions
 createNewTradingPoolSubscription();
 tradingPools.forEach((pool) => {
-  tradingPoolActivitySubscription(pool);
+  poolTradingActivitySubscription(pool);
+  poolLiquidityActivitySubscription(pool);
 });
 
 // Setup buy router endpoint
@@ -178,7 +179,14 @@ function createNewTradingPoolSubscription() {
   console.log("Set up new trading pools filter");
 }
 
-async function tradingPoolActivitySubscription(pool) {
+async function poolLiquidityActivitySubscription(pool) {
+  const addLiquidityTopic =
+    "0x3b67bb924a0e01cd52df231e47e53b28799a0f34d0ea653d1778cf3969492c1e";
+  const removeLiquidityTopic =
+    "0xf9e7f47c2cd7655661046fbcf0164a4d4ac48c3cd9c0ed8b45410e965cc33714";
+}
+
+async function poolTradingActivitySubscription(pool) {
   const getLpFunctionSig = "0xcdd3f298";
 
   // Create a websocket to listen to a pools activity
