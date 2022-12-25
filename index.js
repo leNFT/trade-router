@@ -14,7 +14,7 @@ const alchemySettings = {
 const alchemy = new Alchemy(alchemySettings);
 const maxPriceComparator = (a, b) => a.price - b.price;
 const minPriceComparator = (a, b) => b.price - a.price;
-// Set initial var state for chain id 5
+// Set initial var state for chain id
 var { tradingPools, maxHeaps, minHeaps } = await setInitialState(5);
 const addresses = contractAddresses["5"];
 
@@ -30,6 +30,7 @@ app.get("/buy", async (req, res) => {
   const pool = req.query["pool"];
   const priceAfterBuyFunctionSig = "0xbb1690e2";
   var selectedLps = [];
+  var price = 0;
 
   // Clone the heap so we can change it freely
   var minHeap = minHeaps[pool].clone();
@@ -42,6 +43,7 @@ app.get("/buy", async (req, res) => {
     }
     if (minLp.nfts.length > 0) {
       selectedLps.push(minLp.id);
+      price += minLp.price;
 
       // Add lp with update buy price to min lp
       // Get buy price and add it to the heap
@@ -69,7 +71,7 @@ app.get("/buy", async (req, res) => {
       });
     }
   }
-  res.send(selectedLps);
+  res.send({ lps: selectedLps, price: price });
 });
 
 // Setup sell router endpoint
@@ -78,6 +80,7 @@ app.get("/sell", async (req, res) => {
   const priceAfterSellFunctionSig = "0x6d31f2ca";
   const pool = req.query["pool"];
   var selectedLps = [];
+  var price = 0;
   // Clone the heap so we can change it freely
   var maxHeap = maxHeaps[pool].clone();
 
@@ -89,6 +92,7 @@ app.get("/sell", async (req, res) => {
     }
     if (maxLp.tokenAmount > maxLp.price) {
       selectedLps.push(maxLp.id);
+      price += maxLp.price;
 
       // Add lp with update buy price to min lp
       // Get buy price and add it to the heap
@@ -116,7 +120,7 @@ app.get("/sell", async (req, res) => {
       });
     }
   }
-  res.send(selectedLps);
+  res.send({ lps: selectedLps, price: price });
 });
 
 // Listen to new connections
