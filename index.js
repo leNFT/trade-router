@@ -190,6 +190,79 @@ async function poolLiquidityActivitySubscription(pool) {
     "0x3b67bb924a0e01cd52df231e47e53b28799a0f34d0ea653d1778cf3969492c1e";
   const removeLiquidityTopic =
     "0xf9e7f47c2cd7655661046fbcf0164a4d4ac48c3cd9c0ed8b45410e965cc33714";
+
+  // Create a websocket to listen to a pools activity
+  const tradingPoolActivityFilter = {
+    address: pool,
+    topics: [addLiquidityTopic, removeLiquidityTopic],
+  };
+
+  alchemy.ws.on(tradingPoolActivityFilter, async (log, event) => {
+    const lpId = utils.defaultAbiCoder.decode(["uint256"], log.topics[2])[0];
+
+    if (log.topics[0] == addLiquidityTopic) {
+      // If a user is doing a buying operation
+      console.log("Got new add liquidity");
+      const getNewLpResponse = await alchemy.core.call({
+        to: pool,
+        data:
+          getLpFunctionSig +
+          utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
+      });
+
+      const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
+      console.log("lp", lp);
+
+      // Get current (sell) price and add it to the max heap
+      const currentPrice = BigNumber.from(lp[0].price).toNumber();
+      console.log("currentPrice", currentPrice);
+      maxHeaps[pool].push({
+        id: lpId,
+        price: currentPrice,
+        curve: lp[0].curve,
+        delta: BigNumber.from(lp[0].delta).toNumber(),
+        tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
+        nfts: lp[0].nftIds,
+      });
+
+      // Get buy price and add it to the heap
+      const getPriceAfterBuyResponse = await alchemy.core.call({
+        to: lp[0].curve,
+        data:
+          priceAfterBuyFunctionSig +
+          utils.defaultAbiCoder.encode(["uint256"], [currentPrice]).slice(2) +
+          utils.defaultAbiCoder
+            .encode(["uint256"], [BigNumber.from(lp[0].delta).toString()])
+            .slice(2),
+      });
+
+      const buyPrice = utils.defaultAbiCoder
+        .decode(["uint256"], getPriceAfterBuyResponse)[0]
+        .toNumber();
+      console.log("buyPrice", buyPrice);
+      minHeaps[pool].push({
+        id: lpId,
+        price: buyPrice,
+        curve: lp[0].curve,
+        delta: BigNumber.from(lp[0].delta).toNumber(),
+        tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
+        nfts: lp[0].nftIds,
+      });
+    } else if (log.topics[0] == removeLiquidityTopic) {
+      // If a user is doing a selling operation
+      console.log("Got new remove liquidity");
+
+      // Find LPs in heaps' liquidity positions
+      const nftMaxHeapLpIndex = maxHeaps[pool].heapArray.findIndex(
+        (el) => el.id == lpId
+      );
+      const nftMinHeapLpIndex = minHeaps[pool].heapArray.findIndex(
+        (el) => el.id == lpId
+      );
+      maxHeaps.remove(maxHeaps[pool].heapArray[nftMaxHeapLpIndex]);
+      minHeaps.remove(minHeaps[pool].heapArray[nftMinHeapLpIndex]);
+    }
+  });
 }
 
 async function poolTradingActivitySubscription(pool) {
