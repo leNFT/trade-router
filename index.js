@@ -56,14 +56,16 @@ app.get("/buy", async (req, res) => {
 
   while (selectedLps.length < buyAmount) {
     // if the lp with the lowest price has enough liquidity we add it to the response
-    const minLp = minHeap.pop();
+    var minLp = minHeap.pop();
     if (minLp === undefined) {
       break;
     }
     if (minLp.nfts.length > 0) {
       selectedLps.push(minLp.id);
       price += minLp.price;
-      exampleNFTs.push(minLp.nfts.pop());
+      exampleNFTs.push(
+        BigNumber.from(minLp.nfts[minLp.nfts.length - 1]).toNumber()
+      );
 
       // Add lp with update buy price to min lp
       // Get buy price and add it to the heap
@@ -87,7 +89,7 @@ app.get("/buy", async (req, res) => {
         curve: minLp.curve,
         delta: BigNumber.from(minLp.delta).toNumber(),
         tokenAmount: BigNumber.from(minLp.tokenAmount).toString(),
-        nfts: minLp.nfts,
+        nfts: minLp.nfts.slice(0, -1),
       });
     }
   }
