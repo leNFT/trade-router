@@ -73,8 +73,50 @@ app.get("/buy", async (req, res) => {
 });
 
 // Setup sell router endpoint
-app.get("/sell", (req, res) => {
-  res.send("SwapRouter Sell Service");
+app.get("/sell", async (req, res) => {
+  const sellAmount = req.query["amount"];
+  const priceAfterSellFunctionSig = "0x6d31f2ca";
+  const pool = req.query["pool"];
+  var selectedLps = [];
+  // Clone the heap so we can change it freely
+  var maxHeap = maxHeaps[pool].clone();
+
+  while (selectedLps.length < sellAmount) {
+    // if the lp with the lowest price has enough liquidity we add it to the response
+    const maxLp = maxHeap.pop();
+    if (maxLp === undefined) {
+      break;
+    }
+    if (maxLp.tokenAmount > maxLp.price) {
+      selectedLps.push(maxLp.id);
+
+      // Add lp with update buy price to min lp
+      // Get buy price and add it to the heap
+      const getPriceAfterSellResponse = await alchemy.core.call({
+        to: maxLp.curve,
+        data:
+          priceAfterSellFunctionSig +
+          utils.defaultAbiCoder.encode(["uint256"], [maxLp.price]).slice(2) +
+          utils.defaultAbiCoder
+            .encode(["uint256"], [BigNumber.from(maxLp.delta).toString()])
+            .slice(2),
+      });
+
+      const nextSellPrice = utils.defaultAbiCoder
+        .decode(["uint256"], getPriceAfterSellResponse)[0]
+        .toNumber();
+      console.log("nextSellPrice", nextSellPrice);
+      minHeaps[pool].push({
+        id: maxLp.id,
+        price: nextSellPrice,
+        curve: maxLp.curve,
+        delta: BigNumber.from(maxLp.delta).toNumber(),
+        tokenAmount: BigNumber.from(maxLp.tokenAmount).toString(),
+        nfts: maxLp.nfts.slice(0, -1),
+      });
+    }
+  }
+  res.send(selectedLps);
 });
 
 // Listen to new connections
