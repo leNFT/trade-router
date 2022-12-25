@@ -5,6 +5,8 @@ import { BigNumber } from "@ethersproject/bignumber";
 import { Heap } from "heap-js";
 import contractAddresses from "./contractAddresses.json" assert { type: "json" };
 import express from "express";
+import Cors from "cors";
+import initMiddleware from "./lib/init-middleware";
 const app = express();
 const port = 8080;
 const alchemySettings = {
@@ -18,6 +20,20 @@ const minPriceComparator = (a, b) => b.price - a.price;
 var { tradingPools, maxHeaps, minHeaps } = await setInitialState(5);
 const addresses = contractAddresses["5"];
 
+// Initialize the cors middleware
+const cors = initMiddleware(
+  // You can read more about the available options here: https://github.com/expressjs/cors#configuration-options
+  Cors({
+    // Only allow requests with GET and from the frontend
+    methods: ["GET"],
+    origin: [
+      "https://lenft.finance",
+      "http://localhost:3000",
+      "https://lenft.fi",
+    ],
+  })
+);
+
 // Set up subscriptions
 createNewTradingPoolSubscription();
 tradingPools.forEach((pool) => {
@@ -26,6 +42,8 @@ tradingPools.forEach((pool) => {
 
 // Setup buy router endpoint
 app.get("/buy", async (req, res) => {
+  // Run cors
+  await cors(req, res);
   const buyAmount = req.query["amount"];
   const pool = req.query["pool"];
   const priceAfterBuyFunctionSig = "0xbb1690e2";
@@ -76,6 +94,8 @@ app.get("/buy", async (req, res) => {
 
 // Setup sell router endpoint
 app.get("/sell", async (req, res) => {
+  // Run cors
+  await cors(req, res);
   const sellAmount = req.query["amount"];
   const priceAfterSellFunctionSig = "0x6d31f2ca";
   const pool = req.query["pool"];

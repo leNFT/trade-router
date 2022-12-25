@@ -20,6 +20,7 @@
   "dependencies": {
     "@ethersproject/bignumber": "^5.7.0",
     "alchemy-sdk": "^2.2.5",
+    "cors": "^2.8.5",
     "ethers": "^5.7.2",
     "express": "^4.18.2",
     "heap-js": "^2.2.0"
