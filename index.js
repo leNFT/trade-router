@@ -183,7 +183,7 @@ function createNewTradingPoolSubscription() {
   console.log("Set up new trading pools filter");
 }
 
-async function poolLiquidityActivitySubscription(pool) {
+function poolLiquidityActivitySubscription(pool) {
   const addLiquidityTopic =
     "0x3b67bb924a0e01cd52df231e47e53b28799a0f34d0ea653d1778cf3969492c1e";
   const removeLiquidityTopic =
@@ -263,7 +263,7 @@ async function poolLiquidityActivitySubscription(pool) {
   });
 }
 
-async function poolTradingActivitySubscription(pool) {
+function poolTradingActivitySubscription(pool) {
   const getLpFunctionSig = "0xcdd3f298";
 
   // Create a websocket to listen to a pools activity
