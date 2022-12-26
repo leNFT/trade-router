@@ -32,7 +32,7 @@ export async function setInitialState(chainId) {
   const addLiquidityTopic =
     "0x3b67bb924a0e01cd52df231e47e53b28799a0f34d0ea653d1778cf3969492c1e";
   const removeLiquidityTopic =
-    "0xf9e7f47c2cd7655661046fbcf0164a4d4ac48c3cd9c0ed8b45410e965cc33714";
+    "0xdfdd120ded9b7afc0c23dd5310e93aaa3e1c3b9f75af9b805fab3030842439f2";
   const priceAfterBuyFunctionSig = "0xbb1690e2";
   const getLpFunctionSig = "0xcdd3f298";
 
@@ -104,8 +104,6 @@ export async function setInitialState(chainId) {
       );
     }
   }
-
-  console.log("lps", lps);
 
   // Get liquidity positions for each pool to build heaps
   const iface = new utils.Interface(tradingPoolContract.abi);
