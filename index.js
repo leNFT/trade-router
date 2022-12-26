@@ -264,29 +264,14 @@ function poolLiquidityActivitySubscription(pool) {
 }
 
 function poolTradingActivitySubscription(pool) {
-  const getLpFunctionSig = "0xcdd3f298";
+  console.log("Creating trading activity subscription for ", pool);
 
-  // Create a websocket to listen to a pools activity
-  const tradingPoolActivityFilter = {
-    address: pool,
-    topics: [
-      utils.id("Buy(address,uint256[],uint256)"),
-      utils.id("Sell(address,uint256[],uint256)"),
-    ],
-  };
-
-  alchemy.ws.on(tradingPoolActivityFilter, async (log, event) => {
+  // Update LP from logs
+  async function updateLPWithLog(log) {
+    const getLpFunctionSig = "0xcdd3f298";
     // Emitted whenever a new buy / sell is done in a pool
-    console.log("Got pool activity ", pool);
     var nfts = utils.defaultAbiCoder.decode(["uint256[]"], log.topics[2])[0];
     console.log("NFTs: ", nfts);
-    if (log.topics[0] == utils.id("Buy(address,uint256[],uint256)")) {
-      // If a user is doing a buying operation
-      console.log("Got new buying swap");
-    } else if (log.topics[0] == utils.id("Sell(address,uint256[],uint256)")) {
-      // If a user is doing a selling operation
-      console.log("Got new selling swap");
-    }
 
     // Find all the LPs we need to update
     var updatedLps = [];
@@ -361,5 +346,26 @@ function poolTradingActivitySubscription(pool) {
         nfts: lp[0].nftIds,
       });
     }
+  }
+
+  // Create two websocket to listen to a pools activity (buy and sell)
+  const buyPoolActivityFilter = {
+    address: pool,
+    topics: [utils.id("Buy(address,uint256[],uint256)")],
+  };
+
+  const sellPoolActivityFilter = {
+    address: pool,
+    topics: [utils.id("Sell(address,uint256[],uint256)")],
+  };
+
+  alchemy.ws.on(sellPoolActivityFilter, async (log, event) => {
+    console.log("Got new selling swap");
+    await updateLPWithLog(log);
+  });
+
+  alchemy.ws.on(buyPoolActivityFilter, async (log, event) => {
+    console.log("Got new buying swap");
+    await updateLPWithLog(log);
   });
 }
