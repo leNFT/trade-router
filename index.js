@@ -85,7 +85,7 @@ app.get("/buy", async (req, res) => {
           .decode(["uint256"], getPriceAfterBuyResponse)[0]
           .toNumber();
         console.log("nextBuyPrice", nextBuyPrice);
-        minHeaps[pool].push({
+        minHeap.push({
           id: minLp.id,
           price: nextBuyPrice,
           curve: minLp.curve,
@@ -139,7 +139,7 @@ app.get("/sell", async (req, res) => {
           .decode(["uint256"], getPriceAfterSellResponse)[0]
           .toNumber();
         console.log("nextSellPrice", nextSellPrice);
-        minHeaps[pool].push({
+        maxHeap.push({
           id: maxLp.id,
           price: nextSellPrice,
           curve: maxLp.curve,
