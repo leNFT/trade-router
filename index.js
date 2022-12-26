@@ -66,7 +66,7 @@ app.get("/buy", async (req, res) => {
       }
       if (minLp.nfts.length > 0) {
         selectedLps.push(minLp.id);
-        price += minLp.price;
+        price = BigNumber.from(minLp.price).add(price).toString();
         exampleNFTs.push(
           BigNumber.from(minLp.nfts[minLp.nfts.length - 1]).toNumber()
         );
@@ -123,7 +123,7 @@ app.get("/sell", async (req, res) => {
       }
       if (maxLp.tokenAmount > maxLp.price) {
         selectedLps.push(maxLp.id);
-        price += maxLp.price;
+        price = BigNumber.from(maxLp.price).add(price).toString();
 
         // Add lp with update buy price to min lp
         // Get buy price and add it to the heap
