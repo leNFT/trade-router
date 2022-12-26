@@ -288,21 +288,25 @@ function poolTradingActivitySubscription(pool) {
     const iface = new utils.Interface(tradingPoolContract.abi);
     const decodedLog = iface.parseLog({ data: log.data, topics: log.topics });
     console.log("decodedLog", decodedLog);
-    var nfts = decodedLog.nftIds;
+    var nfts = decodedLog.args.nftIds;
     console.log("NFTs: ", nfts);
 
     // Find all the LPs we need to update
     var updatedLps = [];
-    nfts.forEach((nft) => {
-      const nftMaxHeapLpIndex = maxHeaps[pool].heapArray.findIndex(
-        (el) => el.nfts.contains(nft) == true
+    for (let index = 0; index < nfts.length; index++) {
+      const nft = BigNumber.from(nfts[index]).toNumber();
+      console.log("nft", nft);
+      const nftMaxHeapNFTIndex = maxHeaps[pool].heapArray.findIndex(
+        (el) => el.nfts.includes(nft) == true
       );
-      const nftLP = maxHeaps[pool].heapArray[nftMaxHeapLpIndex].id;
-      if (!updatedLps.contains(nftLP)) {
-        console.log("add pool from NFT id: ", nftLP);
+      console.log("nftMaxHeapNFTIndex", nftMaxHeapNFTIndex);
+      console.log("maxHeaps[pool].heapArray", maxHeaps[pool].heapArray);
+      const nftLP = maxHeaps[pool].heapArray[nftMaxHeapNFTIndex].id;
+      if (!updatedLps.includes(nftLP)) {
+        console.log("add NFT to lp: ", nftLP);
         updatedLps.push(nftLP);
       }
-    });
+    }
 
     // Update every changed LP
     for (let index = 0; index < updatedLps.length; index++) {
@@ -315,8 +319,8 @@ function poolTradingActivitySubscription(pool) {
       const nftMinHeapLpIndex = minHeaps[pool].heapArray.findIndex(
         (el) => el.id == lpId
       );
-      maxHeaps.remove(maxHeaps[pool].heapArray[nftMaxHeapLpIndex]);
-      minHeaps.remove(minHeaps[pool].heapArray[nftMinHeapLpIndex]);
+      maxHeaps[pool].remove(maxHeaps[pool].heapArray[nftMaxHeapLpIndex]);
+      minHeaps[pool].remove(minHeaps[pool].heapArray[nftMinHeapLpIndex]);
 
       const getNewLpResponse = await alchemy.core.call({
         to: pool,

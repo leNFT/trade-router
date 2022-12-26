@@ -131,7 +131,7 @@ export async function setInitialState(chainId) {
         curve: lp[0].curve,
         delta: BigNumber.from(lp[0].delta).toString(),
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
-        nfts: lp[0].nftIds,
+        nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
       });
 
       // Get buy price and add it to the heap
@@ -155,7 +155,7 @@ export async function setInitialState(chainId) {
         curve: lp[0].curve,
         delta: BigNumber.from(lp[0].delta).toString(),
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
-        nfts: lp[0].nftIds,
+        nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
       });
     }
   }
