@@ -269,8 +269,9 @@ function poolTradingActivitySubscription(pool) {
   // Update LP from logs
   async function updateLPWithLog(log) {
     const getLpFunctionSig = "0xcdd3f298";
+    console.log("log", log);
     // Emitted whenever a new buy / sell is done in a pool
-    var nfts = utils.defaultAbiCoder.decode(["uint256[]"], log.topics[2])[0];
+    var nfts = utils.defaultAbiCoder.decode(["uint256[]"], log.data[0])[0];
     console.log("NFTs: ", nfts);
 
     // Find all the LPs we need to update
