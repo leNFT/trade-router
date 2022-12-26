@@ -85,13 +85,13 @@ app.get("/buy", async (req, res) => {
 
         const nextBuyPrice = utils.defaultAbiCoder
           .decode(["uint256"], getPriceAfterBuyResponse)[0]
-          .toNumber();
+          .toString();
         console.log("nextBuyPrice", nextBuyPrice);
         minHeap.push({
           id: minLp.id,
           price: nextBuyPrice,
           curve: minLp.curve,
-          delta: BigNumber.from(minLp.delta).toNumber(),
+          delta: BigNumber.from(minLp.delta).toString(),
           tokenAmount: BigNumber.from(minLp.tokenAmount).toString(),
           nfts: minLp.nfts.slice(0, -1),
         });
@@ -139,13 +139,13 @@ app.get("/sell", async (req, res) => {
 
         const nextSellPrice = utils.defaultAbiCoder
           .decode(["uint256"], getPriceAfterSellResponse)[0]
-          .toNumber();
+          .toString();
         console.log("nextSellPrice", nextSellPrice);
         maxHeap.push({
           id: maxLp.id,
           price: nextSellPrice,
           curve: maxLp.curve,
-          delta: BigNumber.from(maxLp.delta).toNumber(),
+          delta: BigNumber.from(maxLp.delta).toString(),
           tokenAmount: BigNumber.from(maxLp.tokenAmount).toString(),
           nfts: maxLp.nfts.slice(0, -1),
         });
@@ -221,13 +221,13 @@ function poolLiquidityActivitySubscription(pool) {
     console.log("lp", lp);
 
     // Get current (sell) price and add it to the max heap
-    const currentPrice = BigNumber.from(lp[0].price).toNumber();
+    const currentPrice = BigNumber.from(lp[0].price).toString();
     console.log("currentPrice", currentPrice);
     maxHeaps[pool].push({
       id: lpId,
       price: currentPrice,
       curve: lp[0].curve,
-      delta: BigNumber.from(lp[0].delta).toNumber(),
+      delta: BigNumber.from(lp[0].delta).toString(),
       tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
       nfts: lp[0].nftIds,
     });
@@ -245,13 +245,13 @@ function poolLiquidityActivitySubscription(pool) {
 
     const buyPrice = utils.defaultAbiCoder
       .decode(["uint256"], getPriceAfterBuyResponse)[0]
-      .toNumber();
+      .toString();
     console.log("buyPrice", buyPrice);
     minHeaps[pool].push({
       id: lpId,
       price: buyPrice,
       curve: lp[0].curve,
-      delta: BigNumber.from(lp[0].delta).toNumber(),
+      delta: BigNumber.from(lp[0].delta).toString(),
       tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
       nfts: lp[0].nftIds,
     });
@@ -327,13 +327,13 @@ function poolTradingActivitySubscription(pool) {
       console.log("lp", lp);
 
       // Get current (sell) price and add it to the max heap
-      const currentPrice = BigNumber.from(lp[0].price).toNumber();
+      const currentPrice = BigNumber.from(lp[0].price).toString();
       console.log("currentPrice", currentPrice);
       maxHeaps[pool].push({
         id: lpId,
         price: currentPrice,
         curve: lp[0].curve,
-        delta: BigNumber.from(lp[0].delta).toNumber(),
+        delta: BigNumber.from(lp[0].delta).toString(),
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
         nfts: lp[0].nftIds,
       });
@@ -351,13 +351,13 @@ function poolTradingActivitySubscription(pool) {
 
       const buyPrice = utils.defaultAbiCoder
         .decode(["uint256"], getPriceAfterBuyResponse)[0]
-        .toNumber();
+        .toString();
       console.log("buyPrice", buyPrice);
       minHeaps[pool].push({
         id: lpId,
         price: buyPrice,
         curve: lp[0].curve,
-        delta: BigNumber.from(lp[0].delta).toNumber(),
+        delta: BigNumber.from(lp[0].delta).toString(),
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
         nfts: lp[0].nftIds,
       });
