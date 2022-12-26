@@ -230,7 +230,7 @@ function poolLiquidityActivitySubscription(pool) {
       curve: lp[0].curve,
       delta: BigNumber.from(lp[0].delta).toString(),
       tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
-      nfts: lp[0].nftIds,
+      nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
     });
 
     // Get buy price and add it to the heap
@@ -254,7 +254,7 @@ function poolLiquidityActivitySubscription(pool) {
       curve: lp[0].curve,
       delta: BigNumber.from(lp[0].delta).toString(),
       tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
-      nfts: lp[0].nftIds,
+      nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
     });
   });
 
@@ -280,8 +280,9 @@ function poolTradingActivitySubscription(pool) {
   console.log("Creating trading activity subscription for ", pool);
 
   // Update LP from logs
-  async function updateLPWithLog(log) {
+  async function updateLPWithLog(log, mode) {
     const getLpFunctionSig = "0xcdd3f298";
+    const nftToLpFunctionSig = "0x5460d849";
     const priceAfterBuyFunctionSig = "0xbb1690e2";
     console.log("log", log);
     // Emitted whenever a new buy / sell is done in a pool
@@ -294,14 +295,29 @@ function poolTradingActivitySubscription(pool) {
     // Find all the LPs we need to update
     var updatedLps = [];
     for (let index = 0; index < nfts.length; index++) {
+      var nftLP;
       const nft = BigNumber.from(nfts[index]).toNumber();
       console.log("nft", nft);
-      const nftMaxHeapNFTIndex = maxHeaps[pool].heapArray.findIndex(
-        (el) => el.nfts.includes(nft) == true
-      );
-      console.log("nftMaxHeapNFTIndex", nftMaxHeapNFTIndex);
-      console.log("maxHeaps[pool].heapArray", maxHeaps[pool].heapArray);
-      const nftLP = maxHeaps[pool].heapArray[nftMaxHeapNFTIndex].id;
+      if (mode == "buy") {
+        const nftMaxHeapNFTIndex = maxHeaps[pool].heapArray.findIndex(
+          (el) => el.nfts.includes(nft) == true
+        );
+        console.log("nftMaxHeapNFTIndex", nftMaxHeapNFTIndex);
+        console.log("maxHeaps[pool].heapArray", maxHeaps[pool].heapArray);
+        nftLP = maxHeaps[pool].heapArray[nftMaxHeapNFTIndex].id;
+      } else if (mode == "sell") {
+        // Get the lp where the nfts went to
+        const nftToLpResponse = await alchemy.core.call({
+          to: pool,
+          data:
+            nftToLpFunctionSig +
+            utils.defaultAbiCoder.encode(["uint256"], [nft]).slice(2),
+        });
+        nftLP = utils.defaultAbiCoder
+          .decode(["uint256"], nftToLpResponse)[0]
+          .toString();
+      }
+
       if (!updatedLps.includes(nftLP)) {
         console.log("add NFT to lp: ", nftLP);
         updatedLps.push(nftLP);
@@ -383,11 +399,11 @@ function poolTradingActivitySubscription(pool) {
 
   alchemy.ws.on(sellPoolActivityFilter, async (log, event) => {
     console.log("Got new selling swap");
-    await updateLPWithLog(log);
+    await updateLPWithLog(log, "sell");
   });
 
   alchemy.ws.on(buyPoolActivityFilter, async (log, event) => {
     console.log("Got new buying swap");
-    await updateLPWithLog(log);
+    await updateLPWithLog(log, "buy");
   });
 }
