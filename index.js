@@ -192,7 +192,6 @@ function poolLiquidityActivitySubscription(pool) {
     "0x3b67bb924a0e01cd52df231e47e53b28799a0f34d0ea653d1778cf3969492c1e";
   const removeLiquidityTopic =
     "0xdfdd120ded9b7afc0c23dd5310e93aaa3e1c3b9f75af9b805fab3030842439f2";
-  const getLpFunctionSig = "0xcdd3f298";
 
   // Create a websocket to listen to a pools activity
   const addLiquidityPoolActivityFilter = {
@@ -205,6 +204,8 @@ function poolLiquidityActivitySubscription(pool) {
   };
 
   alchemy.ws.on(addLiquidityPoolActivityFilter, async (log, event) => {
+    const priceAfterBuyFunctionSig = "0xbb1690e2";
+    const getLpFunctionSig = "0xcdd3f298";
     const lpId = utils.defaultAbiCoder.decode(["uint256"], log.topics[2])[0];
 
     // If a user is doing a buying operation
@@ -281,6 +282,7 @@ function poolTradingActivitySubscription(pool) {
   // Update LP from logs
   async function updateLPWithLog(log) {
     const getLpFunctionSig = "0xcdd3f298";
+    const priceAfterBuyFunctionSig = "0xbb1690e2";
     console.log("log", log);
     // Emitted whenever a new buy / sell is done in a pool
     const iface = new utils.Interface(tradingPoolContract.abi);
