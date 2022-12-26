@@ -112,7 +112,7 @@ app.get("/sell", async (req, res) => {
   var selectedLps = [];
   var price = 0;
   // Clone the heap so we can change it freely
-  if (maxHeap[pool]) {
+  if (maxHeaps[pool]) {
     var maxHeap = maxHeaps[pool].clone();
 
     while (selectedLps.length < sellAmount) {

@@ -17,8 +17,8 @@ export async function setInitialState(chainId) {
   var lps = {};
   var maxHeaps = {};
   var minHeaps = {};
-  const maxPriceComparator = (a, b) => a.price - b.price;
-  const minPriceComparator = (a, b) => b.price - a.price;
+  const maxPriceComparator = (a, b) => b.price - a.price;
+  const minPriceComparator = (a, b) => a.price - b.price;
 
   const alchemySettings = {
     apiKey: process.env.ALCHEMY_API_KEY,
