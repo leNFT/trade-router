@@ -5,6 +5,8 @@ import { BigNumber } from "@ethersproject/bignumber";
 import { Heap } from "heap-js";
 import contractAddresses from "./contractAddresses.json" assert { type: "json" };
 import express from "express";
+import tradingPoolContract from "./contracts/TradingPool.json" assert { type: "json" };
+
 import Cors from "cors";
 import initMiddleware from "./lib/init-middleware.js";
 const app = express();
@@ -214,6 +216,7 @@ function poolLiquidityActivitySubscription(pool) {
         utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
     });
 
+    const iface = new utils.Interface(tradingPoolContract.abi);
     const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
     console.log("lp", lp);
 
@@ -280,7 +283,10 @@ function poolTradingActivitySubscription(pool) {
     const getLpFunctionSig = "0xcdd3f298";
     console.log("log", log);
     // Emitted whenever a new buy / sell is done in a pool
-    var nfts = utils.defaultAbiCoder.decode(["uint256[]"], log.data[0])[0];
+    const iface = new utils.Interface(tradingPoolContract.abi);
+    const decodedLog = iface.parseLog({ data: log.data, topics: log.topics });
+    console.log("decodedLog", decodedLog);
+    var nfts = decodedLog.nftIds;
     console.log("NFTs: ", nfts);
 
     // Find all the LPs we need to update

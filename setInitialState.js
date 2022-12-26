@@ -129,7 +129,7 @@ export async function setInitialState(chainId) {
         id: lpId,
         price: currentPrice,
         curve: lp[0].curve,
-        delta: BigNumber.from(lp[0].delta).toNumber(),
+        delta: BigNumber.from(lp[0].delta).toString(),
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
         nfts: lp[0].nftIds,
       });
@@ -147,13 +147,13 @@ export async function setInitialState(chainId) {
 
       const buyPrice = utils.defaultAbiCoder
         .decode(["uint256"], getPriceAfterBuyResponse)[0]
-        .toNumber();
+        .toString();
       console.log("buyPrice", buyPrice);
       minHeaps[tradingPool].push({
         id: lpId,
         price: buyPrice,
         curve: lp[0].curve,
-        delta: BigNumber.from(lp[0].delta).toNumber(),
+        delta: BigNumber.from(lp[0].delta).toString(),
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
         nfts: lp[0].nftIds,
       });
