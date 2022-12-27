@@ -122,6 +122,7 @@ app.get("/sell", async (req, res) => {
         break;
       }
       if (BigNumber.from(maxLp.tokenAmount).gte(maxLp.price)) {
+        console.log("maxLp", maxLp);
         selectedLps.push(maxLp.id);
         price = BigNumber.from(maxLp.price).add(price).toString();
 
@@ -140,7 +141,7 @@ app.get("/sell", async (req, res) => {
         const nextSellPrice = utils.defaultAbiCoder
           .decode(["uint256"], getPriceAfterSellResponse)[0]
           .toString();
-        console.log("nextSellPrice", nextSellPrice);
+        console.log("nextSellPriddce", nextSellPrice);
         maxHeap.push({
           id: maxLp.id,
           price: nextSellPrice,
@@ -315,13 +316,13 @@ function poolTradingActivitySubscription(pool) {
             nftToLpFunctionSig +
             utils.defaultAbiCoder.encode(["uint256"], [nft]).slice(2),
         });
-        nftLP = utils.defaultAbiCoder
-          .decode(["uint256"], nftToLpResponse)[0]
-          .toString();
+        nftLP = iface
+          .decodeFunctionResult("nftToLp", nftToLpResponse)
+          .toNumber();
       }
-
+      console.log("nftLP", nftLP);
       if (!updatedLps.includes(nftLP)) {
-        console.log("add NFT to lp: ", nftLP);
+        console.log("add LP's NFT to the LP list: ", nftLP);
         updatedLps.push(nftLP);
       }
     }
