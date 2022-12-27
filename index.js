@@ -146,8 +146,10 @@ app.get("/sell", async (req, res) => {
           price: nextSellPrice,
           curve: maxLp.curve,
           delta: BigNumber.from(maxLp.delta).toString(),
-          tokenAmount: BigNumber.from(maxLp.tokenAmount).toString(),
-          nfts: maxLp.nfts.slice(0, -1),
+          tokenAmount: BigNumber.from(maxLp.tokenAmount)
+            .sub(maxLp.price)
+            .toString(),
+          nfts: maxLp.nfts,
         });
       }
     }
