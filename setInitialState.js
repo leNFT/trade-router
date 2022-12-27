@@ -79,6 +79,8 @@ export async function setInitialState(chainId) {
         result.topics[2]
       )[0];
 
+      console.log("added lp: ", BigNumber.from(lpId).toNumber());
+
       lps[tradingPool].push(BigNumber.from(lpId).toNumber());
     }
 
@@ -91,12 +93,14 @@ export async function setInitialState(chainId) {
     });
 
     for (let i = 0; i < removedLiquidityResponse.length; i++) {
-      const result = addLiquidityResponse[i];
+      const result = removedLiquidityResponse[i];
 
       const lpId = utils.defaultAbiCoder.decode(
         ["uint256"],
         result.topics[2]
       )[0];
+
+      console.log("removed lp: ", BigNumber.from(lpId).toNumber());
 
       lps[tradingPool].splice(
         lps[tradingPool].indexOf(BigNumber.from(lpId).toNumber()),
@@ -109,6 +113,7 @@ export async function setInitialState(chainId) {
   const iface = new utils.Interface(tradingPoolContract.abi);
   for (let i = 0; i < tradingPools.length; i++) {
     const tradingPool = tradingPools[i];
+    console.log("Trading pool " + tradingPool + " LPs:", lps[tradingPool]);
     for (let u = 0; u < lps[tradingPool].length; u++) {
       const lpId = lps[tradingPool][u];
 
