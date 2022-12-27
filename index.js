@@ -317,7 +317,7 @@ function poolTradingActivitySubscription(pool) {
             utils.defaultAbiCoder.encode(["uint256"], [nft]).slice(2),
         });
         nftLP = iface
-          .decodeFunctionResult("nftToLp", nftToLpResponse)
+          .decodeFunctionResult("nftToLp", nftToLpResponse)[0]
           .toNumber();
       }
       console.log("nftLP", nftLP);
