@@ -123,7 +123,7 @@ export async function setInitialState(chainId) {
       console.log("lp", lp);
 
       // Get current (sell) price and add it to the max heap
-      const currentPrice = BigNumber.from(lp[0].price).toNumber();
+      const currentPrice = BigNumber.from(lp[0].price).toString();
       console.log("currentPrice", currentPrice);
       maxHeaps[tradingPool].push({
         id: lpId,

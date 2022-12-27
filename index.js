@@ -16,8 +16,8 @@ const alchemySettings = {
   network: Network.ETH_GOERLI,
 };
 const alchemy = new Alchemy(alchemySettings);
-const maxPriceComparator = (a, b) => a.price - b.price;
-const minPriceComparator = (a, b) => b.price - a.price;
+const maxPriceComparator = (a, b) => b.price - a.price;
+const minPriceComparator = (a, b) => a.price - b.price;
 // Set initial var state for chain id
 var { tradingPools, maxHeaps, minHeaps } = await setInitialState(5);
 const addresses = contractAddresses["5"];
@@ -121,7 +121,7 @@ app.get("/sell", async (req, res) => {
       if (maxLp === undefined) {
         break;
       }
-      if (maxLp.tokenAmount > maxLp.price) {
+      if (BigNumber.from(maxLp.tokenAmount).gte(maxLp.price)) {
         selectedLps.push(maxLp.id);
         price = BigNumber.from(maxLp.price).add(price).toString();
 
