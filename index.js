@@ -43,6 +43,122 @@ tradingPools.forEach((pool) => {
   poolLiquidityActivitySubscription(pool);
 });
 
+// Setup swap router endpoint
+app.get("/swap", async (req, res) => {
+  // Run cors
+  await cors(req, res);
+  const sellAmount = req.query["sellAmount"];
+  const buyAmount = req.query["buyAmount"];
+  const sellPool = req.query["sellPool"];
+  const buyPool = req.query["buyPool"];
+  const priceAfterSellFunctionSig = "0x6d31f2ca";
+  const priceAfterBuyFunctionSig = "0xbb1690e2";
+  var buyPrice = 0;
+  var sellPrice = 0;
+  var selectedSellLps = [];
+  var selectedBuyLps = [];
+  var exampleBuyNFTs = [];
+
+  // Find the most expensive pool to sell into
+  if (maxHeaps[sellPool]) {
+    var maxHeap = maxHeaps[sellPool].clone();
+
+    // Get the price of the sell amount
+    while (selectedSellLps.length < sellAmount) {
+      // if the lp with the lowest price has enough liquidity we add it to the response
+      const maxLp = maxHeap.pop();
+      if (maxLp === undefined) {
+        break;
+      }
+      if (BigNumber.from(maxLp.tokenAmount).gte(maxLp.price)) {
+        console.log("maxLp", maxLp);
+        selectedSellLps.push(maxLp.id);
+        sellPrice = BigNumber.from(maxLp.price).add(sellPrice).toString();
+
+        // Add lp with update buy price to min lp
+        // Get buy price and add it to the heap
+        const getPriceAfterSellResponse = await alchemy.core.call({
+          to: maxLp.curve,
+          data:
+            priceAfterSellFunctionSig +
+            utils.defaultAbiCoder.encode(["uint256"], [maxLp.price]).slice(2) +
+            utils.defaultAbiCoder
+              .encode(["uint256"], [BigNumber.from(maxLp.delta).toString()])
+              .slice(2),
+        });
+
+        const nextSellPrice = utils.defaultAbiCoder
+          .decode(["uint256"], getPriceAfterSellResponse)[0]
+          .toString();
+        console.log("nextSellPriddce", nextSellPrice);
+        maxHeap.push({
+          id: maxLp.id,
+          price: nextSellPrice,
+          curve: maxLp.curve,
+          delta: BigNumber.from(maxLp.delta).toString(),
+          tokenAmount: BigNumber.from(maxLp.tokenAmount)
+            .sub(maxLp.price)
+            .toString(),
+          nfts: maxLp.nfts,
+        });
+      }
+    }
+  }
+
+  // Find the cheapest pool to buy from
+  if (minHeaps[buyPool]) {
+    var minHeap = minHeaps[buyPool].clone();
+
+    while (selectedBuyLps.length < buyAmount) {
+      // if the lp with the lowest price has enough liquidity we add it to the response
+      var minLp = minHeap.pop();
+      if (minLp === undefined) {
+        break;
+      }
+      if (minLp.nfts.length > 0) {
+        selectedBuyLps.push(minLp.id);
+        buyPrice = BigNumber.from(minLp.price).add(buyPrice).toString();
+        exampleBuyNFTs.push(
+          BigNumber.from(minLp.nfts[minLp.nfts.length - 1]).toNumber()
+        );
+
+        // Add lp with update buy price to min lp
+        // Get buy price and add it to the heap
+        const getPriceAfterBuyResponse = await alchemy.core.call({
+          to: minLp.curve,
+          data:
+            priceAfterBuyFunctionSig +
+            utils.defaultAbiCoder.encode(["uint256"], [minLp.price]).slice(2) +
+            utils.defaultAbiCoder
+              .encode(["uint256"], [BigNumber.from(minLp.delta).toString()])
+              .slice(2),
+        });
+
+        const nextBuyPrice = utils.defaultAbiCoder
+          .decode(["uint256"], getPriceAfterBuyResponse)[0]
+          .toString();
+        console.log("nextBuyPrice", nextBuyPrice);
+        minHeap.push({
+          id: minLp.id,
+          price: nextBuyPrice,
+          curve: minLp.curve,
+          delta: BigNumber.from(minLp.delta).toString(),
+          tokenAmount: BigNumber.from(minLp.tokenAmount).toString(),
+          nfts: minLp.nfts.slice(0, -1),
+        });
+      }
+    }
+  }
+
+  res.send({
+    sellLps: selectedSellLps,
+    sellPrice: sellPrice,
+    buyLps: selectedBuyLps,
+    buyPrice: buyPrice,
+    exampleBuyNFTs: exampleBuyNFTs,
+  });
+});
+
 // Setup buy router endpoint
 app.get("/buy", async (req, res) => {
   // Run cors
