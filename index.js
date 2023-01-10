@@ -325,7 +325,9 @@ function poolLiquidityActivitySubscription(pool) {
   alchemy.ws.on(addLiquidityPoolActivityFilter, async (log, event) => {
     const priceAfterBuyFunctionSig = "0xbb1690e2";
     const getLpFunctionSig = "0xcdd3f298";
-    const lpId = utils.defaultAbiCoder.decode(["uint256"], log.topics[2])[0];
+    const lpId = utils.defaultAbiCoder
+      .decode(["uint256"], log.topics[2])[0]
+      .toNumber();
 
     // If a user is doing a buying operation
     console.log("Got new add liquidity");
@@ -378,7 +380,9 @@ function poolLiquidityActivitySubscription(pool) {
   });
 
   alchemy.ws.on(removeLiquidityPoolActivityFilter, async (log, event) => {
-    const lpId = utils.defaultAbiCoder.decode(["uint256"], log.topics[2])[0];
+    const lpId = utils.defaultAbiCoder
+      .decode(["uint256"], log.topics[2])[0]
+      .toNumber();
 
     // If a user is doing a selling operation
     console.log("Got new remove liquidity");
