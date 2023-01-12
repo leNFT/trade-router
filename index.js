@@ -59,6 +59,13 @@ app.get("/swap", async (req, res) => {
   var selectedBuyLps = [];
   var exampleBuyNFTs = [];
 
+  if (sellAmount == 0 || buyAmount == 0) {
+    res.status(400).send({
+      error: "Sell or buy amount is 0",
+    });
+    return;
+  }
+
   // Find the most expensive pool to sell into
   if (maxHeaps[sellPool]) {
     var maxHeap = maxHeaps[sellPool].clone();
