@@ -53,6 +53,7 @@ app.get("/swap", async (req, res) => {
   const buyPool = req.query["buyPool"];
   const priceAfterSellFunctionSig = "0x6d31f2ca";
   const priceAfterBuyFunctionSig = "0xbb1690e2";
+  const getSwapFeeFunctionSig = "0xd4cadf68";
   var buyPrice = 0;
   var sellPrice = 0;
   var selectedSellLps = [];
@@ -65,6 +66,22 @@ app.get("/swap", async (req, res) => {
     });
     return;
   }
+
+  // Find each pool's swap fee
+  const getSellPoolFeeResponse = await alchemy.core.call({
+    to: sellPool,
+    data: getSwapFeeFunctionSig,
+  });
+  const sellPoolFee = utils.defaultAbiCoder
+    .decode(["uint256"], getSellPoolFeeResponse)[0]
+    .toNumber();
+  const getBuyPoolFeeResponse = await alchemy.core.call({
+    to: buyPool,
+    data: getSwapFeeFunctionSig,
+  });
+  const buyPoolFee = utils.defaultAbiCoder
+    .decode(["uint256"], getBuyPoolFeeResponse)[0]
+    .toNumber();
 
   // Find the most expensive pool to sell into
   if (maxHeaps[sellPool]) {
@@ -97,7 +114,7 @@ app.get("/swap", async (req, res) => {
         const nextSellPrice = utils.defaultAbiCoder
           .decode(["uint256"], getPriceAfterSellResponse)[0]
           .toString();
-        console.log("nextSellPriddce", nextSellPrice);
+        console.log("nextSellPrice", nextSellPrice);
         maxHeap.push({
           id: maxLp.id,
           price: nextSellPrice,
@@ -157,11 +174,14 @@ app.get("/swap", async (req, res) => {
     }
   }
 
+  const buyFee = (buyPrice * buyPoolFee) / 10000;
+  const sellFee = (sellPrice * sellPoolFee) / 10000;
+
   res.send({
     sellLps: selectedSellLps,
-    sellPrice: sellPrice,
+    sellPrice: sellPrice - sellFee,
     buyLps: selectedBuyLps,
-    buyPrice: buyPrice,
+    buyPrice: buyPrice + buyFee,
     exampleBuyNFTs: exampleBuyNFTs,
   });
 });
@@ -173,9 +193,19 @@ app.get("/buy", async (req, res) => {
   const buyAmount = req.query["amount"];
   const pool = req.query["pool"];
   const priceAfterBuyFunctionSig = "0xbb1690e2";
+  const getSwapFeeFunctionSig = "0xd4cadf68";
   var selectedLps = [];
   var exampleNFTs = [];
   var price = 0;
+
+  // Find pool swap fee
+  const getPoolFeeResponse = await alchemy.core.call({
+    to: pool,
+    data: getSwapFeeFunctionSig,
+  });
+  const poolFee = utils.defaultAbiCoder
+    .decode(["uint256"], getPoolFeeResponse)[0]
+    .toNumber();
 
   // Clone the heap so we can change it freely
   if (minHeaps[pool]) {
@@ -222,7 +252,9 @@ app.get("/buy", async (req, res) => {
     }
   }
 
-  res.send({ lps: selectedLps, price: price, exampleNFTs: exampleNFTs });
+  const fee = (buyPrice * poolFee) / 10000;
+
+  res.send({ lps: selectedLps, price: price + fee, exampleNFTs: exampleNFTs });
 });
 
 // Setup sell router endpoint
@@ -231,9 +263,20 @@ app.get("/sell", async (req, res) => {
   await cors(req, res);
   const sellAmount = req.query["amount"];
   const priceAfterSellFunctionSig = "0x6d31f2ca";
+  const getSwapFeeFunctionSig = "0xd4cadf68";
   const pool = req.query["pool"];
   var selectedLps = [];
   var price = 0;
+
+  // Find pool swap fee
+  const getPoolFeeResponse = await alchemy.core.call({
+    to: pool,
+    data: getSwapFeeFunctionSig,
+  });
+  const poolFee = utils.defaultAbiCoder
+    .decode(["uint256"], getPoolFeeResponse)[0]
+    .toNumber();
+
   // Clone the heap so we can change it freely
   if (maxHeaps[pool]) {
     var maxHeap = maxHeaps[pool].clone();
@@ -279,7 +322,9 @@ app.get("/sell", async (req, res) => {
     }
   }
 
-  res.send({ lps: selectedLps, price: price });
+  const fee = (price * poolFee) / 10000;
+
+  res.send({ lps: selectedLps, price: price - fee });
 });
 
 // Listen to new connections
