@@ -179,9 +179,9 @@ app.get("/swap", async (req, res) => {
 
   res.send({
     sellLps: selectedSellLps,
-    sellPrice: sellPrice - sellFee,
+    sellPrice: BigNumber.from(sellPrice).sub(sellFee).toString(),
     buyLps: selectedBuyLps,
-    buyPrice: buyPrice + buyFee,
+    buyPrice: BigNumber.from(buyPrice).add(buyFee).toString(),
     exampleBuyNFTs: exampleBuyNFTs,
   });
 });
@@ -254,8 +254,13 @@ app.get("/buy", async (req, res) => {
   }
 
   const fee = (price * poolFee) / 10000;
+  console.log("buyFee", fee);
 
-  res.send({ lps: selectedLps, price: price + fee, exampleNFTs: exampleNFTs });
+  res.send({
+    lps: selectedLps,
+    price: BigNumber.from(price).add(fee).toString(),
+    exampleNFTs: exampleNFTs,
+  });
 });
 
 // Setup sell router endpoint
@@ -325,7 +330,10 @@ app.get("/sell", async (req, res) => {
 
   const fee = (price * poolFee) / 10000;
 
-  res.send({ lps: selectedLps, price: price - fee });
+  res.send({
+    lps: selectedLps,
+    price: BigNumber.from(price).sub(fee).toString(),
+  });
 });
 
 // Listen to new connections
