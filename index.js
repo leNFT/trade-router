@@ -350,6 +350,10 @@ function createNewTradingPoolSubscription() {
     maxHeaps[tradingPool] = new Heap(maxPriceComparator);
     minHeaps[tradingPool] = new Heap(minPriceComparator);
 
+    // Subscribe to the new trading pool activites
+    poolTradingActivitySubscription(tradingPool);
+    poolLiquidityActivitySubscription(tradingPool);
+
     console.log("Got new trading pool: ", tradingPool);
   });
 
