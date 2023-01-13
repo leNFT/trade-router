@@ -206,6 +206,7 @@ app.get("/buy", async (req, res) => {
   const poolFee = utils.defaultAbiCoder
     .decode(["uint256"], getPoolFeeResponse)[0]
     .toNumber();
+  console.log("poolFee", poolFee);
 
   // Clone the heap so we can change it freely
   if (minHeaps[pool]) {
@@ -252,7 +253,7 @@ app.get("/buy", async (req, res) => {
     }
   }
 
-  const fee = (buyPrice * poolFee) / 10000;
+  const fee = (price * poolFee) / 10000;
 
   res.send({ lps: selectedLps, price: price + fee, exampleNFTs: exampleNFTs });
 });
