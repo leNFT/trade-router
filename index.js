@@ -382,7 +382,8 @@ function poolLiquidityActivitySubscription(pool) {
       .toNumber();
 
     // If a user is doing a buying operation
-    console.log("Got new add liquidity");
+    console.log("Got new add liquidity, lpId:", lpId);
+    console.log("pool:", pool);
     const getNewLpResponse = await alchemy.core.call({
       to: pool,
       data:
@@ -429,6 +430,8 @@ function poolLiquidityActivitySubscription(pool) {
       tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
       nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
     });
+
+    console.log("addedliquidity. maxHeaps:", maxHeaps[pool].heapArray);
   });
 
   alchemy.ws.on(removeLiquidityPoolActivityFilter, async (log, event) => {
