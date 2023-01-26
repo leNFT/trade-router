@@ -67,6 +67,13 @@ app.get("/swap", async (req, res) => {
     return;
   }
 
+  if (buyPool == sellPool) {
+    res.status(400).send({
+      error: "Buy and sell pool are the same",
+    });
+    return;
+  }
+
   // Find each pool's swap fee
   const getSellPoolFeeResponse = await alchemy.core.call({
     to: sellPool,
@@ -208,6 +215,13 @@ app.get("/swapExact", async (req, res) => {
   if (sellAmount == 0 || buyNFTs.length == 0) {
     res.status(400).send({
       error: "Sell or buy amount is 0",
+    });
+    return;
+  }
+
+  if (buyPool == sellPool) {
+    res.status(400).send({
+      error: "Buy and sell pool are the same",
     });
     return;
   }
