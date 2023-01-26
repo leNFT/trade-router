@@ -320,7 +320,6 @@ app.get("/swapExact", async (req, res) => {
     } else {
       price = selectedLpBuyPrice[lpId];
     }
-    buyPrice = BigNumber.from(buyPrice).add(price).toString();
 
     // Add lp with update buy price to min lp
     // Get buy price and add it to the heap
@@ -338,6 +337,8 @@ app.get("/swapExact", async (req, res) => {
       .decode(["uint256"], getPriceAfterBuyResponse)[0]
       .toString();
     console.log("nextBuyPrice", nextBuyPrice);
+    buyPrice = BigNumber.from(buyPrice).add(nextBuyPrice).toString();
+
     selectedLpBuyPrice[lpId] = nextBuyPrice;
   }
 
@@ -485,7 +486,6 @@ app.get("/buyExact", async (req, res) => {
     } else {
       price = selectedLpBuyPrice[lpId];
     }
-    priceSum = BigNumber.from(priceSum).add(price).toString();
 
     // Add lp with update buy price to min lp
     // Get buy price and add it to the heap
@@ -503,6 +503,8 @@ app.get("/buyExact", async (req, res) => {
       .decode(["uint256"], getPriceAfterBuyResponse)[0]
       .toString();
     console.log("nextBuyPrice", nextBuyPrice);
+    priceSum = BigNumber.from(priceSum).add(nextBuyPrice).toString();
+
     selectedLpBuyPrice[lpId] = nextBuyPrice;
   }
 
