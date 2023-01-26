@@ -186,6 +186,149 @@ app.get("/swap", async (req, res) => {
   });
 });
 
+// Setup swap router endpoint
+app.get("/swapExact", async (req, res) => {
+  // Run cors
+  await cors(req, res);
+  const sellAmount = req.query["sellAmount"];
+  const buyAmount = req.query["buyAmount"];
+  const sellPool = req.query["sellPool"];
+  const buyPool = req.query["buyPool"];
+  const priceAfterSellFunctionSig = "0x6d31f2ca";
+  const priceAfterBuyFunctionSig = "0xbb1690e2";
+  const getSwapFeeFunctionSig = "0xd4cadf68";
+  var buyPrice = 0;
+  var sellPrice = 0;
+  var selectedSellLps = [];
+  var selectedBuyLps = [];
+  var exampleBuyNFTs = [];
+
+  if (sellAmount == 0 || buyAmount == 0) {
+    res.status(400).send({
+      error: "Sell or buy amount is 0",
+    });
+    return;
+  }
+
+  // Find each pool's swap fee
+  const getSellPoolFeeResponse = await alchemy.core.call({
+    to: sellPool,
+    data: getSwapFeeFunctionSig,
+  });
+  const sellPoolFee = utils.defaultAbiCoder
+    .decode(["uint256"], getSellPoolFeeResponse)[0]
+    .toNumber();
+  const getBuyPoolFeeResponse = await alchemy.core.call({
+    to: buyPool,
+    data: getSwapFeeFunctionSig,
+  });
+  const buyPoolFee = utils.defaultAbiCoder
+    .decode(["uint256"], getBuyPoolFeeResponse)[0]
+    .toNumber();
+
+  // Find the most expensive pool to sell into
+  if (maxHeaps[sellPool]) {
+    var maxHeap = maxHeaps[sellPool].clone();
+
+    // Get the price of the sell amount
+    while (selectedSellLps.length < sellAmount) {
+      // if the lp with the lowest price has enough liquidity we add it to the response
+      const maxLp = maxHeap.pop();
+      if (maxLp === undefined) {
+        break;
+      }
+      if (BigNumber.from(maxLp.tokenAmount).gte(maxLp.price)) {
+        console.log("maxLp", maxLp);
+        selectedSellLps.push(maxLp.id);
+        sellPrice = BigNumber.from(maxLp.price).add(sellPrice).toString();
+
+        // Add lp with update buy price to min lp
+        // Get buy price and add it to the heap
+        const getPriceAfterSellResponse = await alchemy.core.call({
+          to: maxLp.curve,
+          data:
+            priceAfterSellFunctionSig +
+            utils.defaultAbiCoder.encode(["uint256"], [maxLp.price]).slice(2) +
+            utils.defaultAbiCoder
+              .encode(["uint256"], [BigNumber.from(maxLp.delta).toString()])
+              .slice(2),
+        });
+
+        const nextSellPrice = utils.defaultAbiCoder
+          .decode(["uint256"], getPriceAfterSellResponse)[0]
+          .toString();
+        console.log("nextSellPrice", nextSellPrice);
+        maxHeap.push({
+          id: maxLp.id,
+          price: nextSellPrice,
+          curve: maxLp.curve,
+          delta: BigNumber.from(maxLp.delta).toString(),
+          tokenAmount: BigNumber.from(maxLp.tokenAmount)
+            .sub(maxLp.price)
+            .toString(),
+          nfts: maxLp.nfts,
+        });
+      }
+    }
+  }
+
+  // Find the cheapest pool to buy from
+  if (minHeaps[buyPool]) {
+    var minHeap = minHeaps[buyPool].clone();
+
+    while (selectedBuyLps.length < buyAmount) {
+      // if the lp with the lowest price has enough liquidity we add it to the response
+      var minLp = minHeap.pop();
+      if (minLp === undefined) {
+        break;
+      }
+      if (minLp.nfts.length > 0) {
+        selectedBuyLps.push(minLp.id);
+        buyPrice = BigNumber.from(minLp.price).add(buyPrice).toString();
+        exampleBuyNFTs.push(
+          BigNumber.from(minLp.nfts[minLp.nfts.length - 1]).toNumber()
+        );
+
+        // Add lp with update buy price to min lp
+        // Get buy price and add it to the heap
+        const getPriceAfterBuyResponse = await alchemy.core.call({
+          to: minLp.curve,
+          data:
+            priceAfterBuyFunctionSig +
+            utils.defaultAbiCoder.encode(["uint256"], [minLp.price]).slice(2) +
+            utils.defaultAbiCoder
+              .encode(["uint256"], [BigNumber.from(minLp.delta).toString()])
+              .slice(2),
+        });
+
+        const nextBuyPrice = utils.defaultAbiCoder
+          .decode(["uint256"], getPriceAfterBuyResponse)[0]
+          .toString();
+        console.log("nextBuyPrice", nextBuyPrice);
+        minHeap.push({
+          id: minLp.id,
+          price: nextBuyPrice,
+          curve: minLp.curve,
+          delta: BigNumber.from(minLp.delta).toString(),
+          tokenAmount: BigNumber.from(minLp.tokenAmount).toString(),
+          nfts: minLp.nfts.slice(0, -1),
+        });
+      }
+    }
+  }
+
+  const buyFee = (buyPrice * buyPoolFee) / 10000;
+  const sellFee = (sellPrice * sellPoolFee) / 10000;
+
+  res.send({
+    sellLps: selectedSellLps,
+    sellPrice: BigNumber.from(sellPrice).sub(sellFee).toString(),
+    buyLps: selectedBuyLps,
+    buyPrice: BigNumber.from(buyPrice).add(buyFee).toString(),
+    exampleBuyNFTs: exampleBuyNFTs,
+  });
+});
+
 // Setup buy router endpoint
 app.get("/buy", async (req, res) => {
   // Run cors
@@ -259,6 +402,92 @@ app.get("/buy", async (req, res) => {
   res.send({
     lps: selectedLps,
     price: BigNumber.from(price).add(fee).toString(),
+    exampleNFTs: exampleNFTs,
+  });
+});
+
+// Setup buy router endpoint
+app.get("/buyExact", async (req, res) => {
+  // Run cors
+  await cors(req, res);
+  const nfts = req.query["nfts"];
+  const pool = req.query["pool"];
+  const priceAfterBuyFunctionSig = "0xbb1690e2";
+  const getSwapFeeFunctionSig = "0xd4cadf68";
+  const nftToLpFunctionSig = "0x5460d849";
+  const getLpFunctionSig = "0xcdd3f298";
+  var selectedLps = [];
+  var selectedLpBuyPrice = {};
+  var priceSum = 0;
+
+  // Find pool swap fee
+  const getPoolFeeResponse = await alchemy.core.call({
+    to: pool,
+    data: getSwapFeeFunctionSig,
+  });
+  const poolFee = utils.defaultAbiCoder
+    .decode(["uint256"], getPoolFeeResponse)[0]
+    .toNumber();
+  console.log("poolFee", poolFee);
+
+  for (var i = 0; i < nfts.length; i++) {
+    // Get the LP for the token
+    var price = 0;
+    const getLPIDResponse = await alchemy.core.call({
+      to: pool,
+      data:
+        nftToLpFunctionSig +
+        utils.defaultAbiCoder.encode(["uint256"], [nfts[i]]).slice(2),
+    });
+
+    const lpId = utils.defaultAbiCoder
+      .decode(["uint256"], getLPIDResponse)[0]
+      .toString();
+    selectedLps.push(lpId);
+
+    // Get the LP
+    if (selectedLpBuyPrice[lpId] === undefined) {
+      const getNewLpResponse = await alchemy.core.call({
+        to: pool,
+        data:
+          getLpFunctionSig +
+          utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
+      });
+
+      const iface = new utils.Interface(tradingPoolContract.abi);
+      const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
+      console.log("lp", lp);
+      price = lp.price;
+    } else {
+      price = selectedLpBuyPrice[lpId];
+    }
+    priceSum = BigNumber.from(priceSum).add(price).toString();
+
+    // Add lp with update buy price to min lp
+    // Get buy price and add it to the heap
+    const getPriceAfterBuyResponse = await alchemy.core.call({
+      to: minLp.curve,
+      data:
+        priceAfterBuyFunctionSig +
+        utils.defaultAbiCoder.encode(["uint256"], [price]).slice(2) +
+        utils.defaultAbiCoder
+          .encode(["uint256"], [BigNumber.from(minLp.delta).toString()])
+          .slice(2),
+    });
+
+    const nextBuyPrice = utils.defaultAbiCoder
+      .decode(["uint256"], getPriceAfterBuyResponse)[0]
+      .toString();
+    console.log("nextBuyPrice", nextBuyPrice);
+    selectedLpBuyPrice[lpId] = nextBuyPrice;
+  }
+
+  const fee = (priceSum * poolFee) / 10000;
+  console.log("buyFee", fee);
+
+  res.send({
+    lps: selectedLps,
+    price: BigNumber.from(priceSum).add(fee).toString(),
     exampleNFTs: exampleNFTs,
   });
 });
