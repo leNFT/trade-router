@@ -417,7 +417,7 @@ app.get("/buy", async (req, res) => {
 app.get("/buyExact", async (req, res) => {
   // Run cors
   await cors(req, res);
-  const nfts = req.query["nfts"];
+  const nfts = req.query["nfts"].split(",");
   const pool = req.query["pool"];
   const priceAfterBuyFunctionSig = "0xbb1690e2";
   const getSwapFeeFunctionSig = "0xd4cadf68";
@@ -436,10 +436,12 @@ app.get("/buyExact", async (req, res) => {
     .decode(["uint256"], getPoolFeeResponse)[0]
     .toNumber();
   console.log("poolFee", poolFee);
+  console.log("nfts", nfts);
 
   for (var i = 0; i < nfts.length; i++) {
     // Get the LP for the token
     var price = 0;
+    var lp;
     const getLPIDResponse = await alchemy.core.call({
       to: pool,
       data:
@@ -462,9 +464,9 @@ app.get("/buyExact", async (req, res) => {
       });
 
       const iface = new utils.Interface(tradingPoolContract.abi);
-      const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
+      lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
       console.log("lp", lp);
-      price = lp.price;
+      price = lp[0].price;
     } else {
       price = selectedLpBuyPrice[lpId];
     }
@@ -473,12 +475,12 @@ app.get("/buyExact", async (req, res) => {
     // Add lp with update buy price to min lp
     // Get buy price and add it to the heap
     const getPriceAfterBuyResponse = await alchemy.core.call({
-      to: lp.curve,
+      to: lp[0].curve,
       data:
         priceAfterBuyFunctionSig +
         utils.defaultAbiCoder.encode(["uint256"], [price]).slice(2) +
         utils.defaultAbiCoder
-          .encode(["uint256"], [BigNumber.from(lp.delta).toString()])
+          .encode(["uint256"], [BigNumber.from(lp[0].delta).toString()])
           .slice(2),
     });
 
@@ -495,7 +497,6 @@ app.get("/buyExact", async (req, res) => {
   res.send({
     lps: selectedLps,
     price: BigNumber.from(priceSum).add(fee).toString(),
-    exampleNFTs: exampleNFTs,
   });
 });
 
