@@ -191,12 +191,14 @@ app.get("/swapExact", async (req, res) => {
   // Run cors
   await cors(req, res);
   const sellAmount = req.query["sellAmount"];
-  const buyNFTs = req.query["buyNFTs"];
+  const buyNFTs = req.query["buyNFTs"].split(",");
   const sellPool = req.query["sellPool"];
   const buyPool = req.query["buyPool"];
   const priceAfterSellFunctionSig = "0x6d31f2ca";
   const priceAfterBuyFunctionSig = "0xbb1690e2";
+  const getLpFunctionSig = "0xcdd3f298";
   const getSwapFeeFunctionSig = "0xd4cadf68";
+  const nftToLpFunctionSig = "0x5460d849";
   var buyPrice = 0;
   var sellPrice = 0;
   var selectedSellLps = [];
@@ -277,10 +279,10 @@ app.get("/swapExact", async (req, res) => {
     // Get the LP for the token
     var price = 0;
     const getLPIDResponse = await alchemy.core.call({
-      to: pool,
+      to: buyPool,
       data:
         nftToLpFunctionSig +
-        utils.defaultAbiCoder.encode(["uint256"], [nfts[i]]).slice(2),
+        utils.defaultAbiCoder.encode(["uint256"], [buyNFTs[i]]).slice(2),
     });
 
     const lpId = utils.defaultAbiCoder
@@ -289,18 +291,18 @@ app.get("/swapExact", async (req, res) => {
     selectedBuyLps.push(lpId);
 
     // Get the LP
-    if (selectedLpBuyPrice[lpId] === undefined) {
-      const getNewLpResponse = await alchemy.core.call({
-        to: pool,
-        data:
-          getLpFunctionSig +
-          utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
-      });
+    const getNewLpResponse = await alchemy.core.call({
+      to: buyPool,
+      data:
+        getLpFunctionSig +
+        utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
+    });
 
-      const iface = new utils.Interface(tradingPoolContract.abi);
-      const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
-      console.log("lp", lp);
-      price = lp.price;
+    const iface = new utils.Interface(tradingPoolContract.abi);
+    const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
+    console.log("lp", lp);
+    if (selectedLpBuyPrice[lpId] === undefined) {
+      price = lp[0].price;
     } else {
       price = selectedLpBuyPrice[lpId];
     }
@@ -309,12 +311,12 @@ app.get("/swapExact", async (req, res) => {
     // Add lp with update buy price to min lp
     // Get buy price and add it to the heap
     const getPriceAfterBuyResponse = await alchemy.core.call({
-      to: lp.curve,
+      to: lp[0].curve,
       data:
         priceAfterBuyFunctionSig +
         utils.defaultAbiCoder.encode(["uint256"], [price]).slice(2) +
         utils.defaultAbiCoder
-          .encode(["uint256"], [BigNumber.from(lp.delta).toString()])
+          .encode(["uint256"], [BigNumber.from(lp[0].delta).toString()])
           .slice(2),
     });
 
@@ -441,7 +443,6 @@ app.get("/buyExact", async (req, res) => {
   for (var i = 0; i < nfts.length; i++) {
     // Get the LP for the token
     var price = 0;
-    var lp;
     const getLPIDResponse = await alchemy.core.call({
       to: pool,
       data:
@@ -455,17 +456,17 @@ app.get("/buyExact", async (req, res) => {
     selectedLps.push(lpId);
 
     // Get the LP
-    if (selectedLpBuyPrice[lpId] === undefined) {
-      const getNewLpResponse = await alchemy.core.call({
-        to: pool,
-        data:
-          getLpFunctionSig +
-          utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
-      });
+    const getNewLpResponse = await alchemy.core.call({
+      to: pool,
+      data:
+        getLpFunctionSig +
+        utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
+    });
 
-      const iface = new utils.Interface(tradingPoolContract.abi);
-      lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
-      console.log("lp", lp);
+    const iface = new utils.Interface(tradingPoolContract.abi);
+    const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
+    console.log("lp", lp);
+    if (selectedLpBuyPrice[lpId] === undefined) {
       price = lp[0].price;
     } else {
       price = selectedLpBuyPrice[lpId];
