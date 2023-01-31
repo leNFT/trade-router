@@ -59,6 +59,10 @@ app.get("/swap", async (req, res) => {
   var selectedSellLps = [];
   var selectedBuyLps = [];
   var exampleBuyNFTs = [];
+  var firstBuyPrice = 0;
+  var lastBuyPrice = 0;
+  var firstSellPrice = 0;
+  var lastSellPrice = 0;
 
   if (sellAmount == 0 || buyAmount == 0) {
     res.status(400).send({
@@ -103,7 +107,13 @@ app.get("/swap", async (req, res) => {
       }
       if (BigNumber.from(maxLp.tokenAmount).gte(maxLp.price)) {
         console.log("maxLp", maxLp);
+        // Save the first sell price
+        if (selectedSellLps.length == 0) {
+          firstSellPrice = maxLp.price;
+        }
+        // Add lp to selectedSellLps
         selectedSellLps.push(maxLp.id);
+        // Add lp price to sell price sum
         sellPrice = BigNumber.from(maxLp.price).add(sellPrice).toString();
 
         // Add lp with update buy price to min lp
@@ -134,6 +144,9 @@ app.get("/swap", async (req, res) => {
         });
       }
     }
+
+    // Save the last sell price
+    lastSellPrice = maxHeap.peek().price;
   }
 
   // Find the cheapest pool to buy from
@@ -147,8 +160,15 @@ app.get("/swap", async (req, res) => {
         break;
       }
       if (minLp.nfts.length > 0) {
+        // Save the first buy price
+        if (selectedBuyLps.length == 0) {
+          firstBuyPrice = minLp.price;
+        }
+        // Add lp to selectedBuyLps
         selectedBuyLps.push(minLp.id);
+        // Add lp price to buy price sum
         buyPrice = BigNumber.from(minLp.price).add(buyPrice).toString();
+        // Add LP's nft to exampleBuyNFTs
         exampleBuyNFTs.push(
           BigNumber.from(minLp.nfts[minLp.nfts.length - 1]).toNumber()
         );
@@ -179,6 +199,9 @@ app.get("/swap", async (req, res) => {
         });
       }
     }
+
+    // Save the last buy price
+    lastBuyPrice = minHeap.peek().price;
   }
 
   const buyFee = (buyPrice * buyPoolFee) / 10000;
@@ -187,8 +210,22 @@ app.get("/swap", async (req, res) => {
   res.send({
     sellLps: selectedSellLps,
     sellPrice: BigNumber.from(sellPrice).sub(sellFee).toString(),
+    sellPriceImpact: Math.floor(
+      BigNumber.from(firstSellPrice)
+        .sub(lastSellPrice)
+        .mul(10000)
+        .div(firstSellPrice)
+        .toNumber()
+    ),
     buyLps: selectedBuyLps,
     buyPrice: BigNumber.from(buyPrice).add(buyFee).toString(),
+    buyPriceImpact: Math.floor(
+      BigNumber.from(lastBuyPrice)
+        .sub(firstBuyPrice)
+        .mul(10000)
+        .div(firstBuyPrice)
+        .toNumber()
+    ),
     exampleBuyNFTs: exampleBuyNFTs,
   });
 });
@@ -364,6 +401,8 @@ app.get("/buy", async (req, res) => {
   var selectedLps = [];
   var exampleNFTs = [];
   var price = 0;
+  var firstPrice = 0;
+  var lastPrice = 0;
 
   // Find pool swap fee
   const getPoolFeeResponse = await alchemy.core.call({
@@ -386,6 +425,11 @@ app.get("/buy", async (req, res) => {
         break;
       }
       if (minLp.nfts.length > 0) {
+        // Save the first sell price
+        if (selectedLps.length == 0) {
+          firstPrice = maxLp.price;
+        }
+
         selectedLps.push(minLp.id);
         price = BigNumber.from(minLp.price).add(price).toString();
         exampleNFTs.push(
@@ -418,6 +462,9 @@ app.get("/buy", async (req, res) => {
         });
       }
     }
+
+    // Save the last sell price
+    lastPrice = minHeap.peek().price;
   }
 
   const fee = (price * poolFee) / 10000;
@@ -426,6 +473,13 @@ app.get("/buy", async (req, res) => {
   res.send({
     lps: selectedLps,
     price: BigNumber.from(price).add(fee).toString(),
+    priceImpact: Math.floor(
+      BigNumber.from(firstPrice)
+        .sub(lastPrice)
+        .mul(10000)
+        .div(firstPrice)
+        .toNumber()
+    ),
     exampleNFTs: exampleNFTs,
   });
 });
@@ -527,6 +581,8 @@ app.get("/sell", async (req, res) => {
   const pool = req.query["pool"];
   var selectedLps = [];
   var price = 0;
+  var firstPrice = 0;
+  var lastPrice = 0;
 
   // Find pool swap fee
   const getPoolFeeResponse = await alchemy.core.call({
@@ -548,6 +604,10 @@ app.get("/sell", async (req, res) => {
         break;
       }
       if (BigNumber.from(maxLp.tokenAmount).gte(maxLp.price)) {
+        // Store the first price
+        if (selectedLps.length === 0) {
+          firstPrice = maxLp.price;
+        }
         console.log("maxLp", maxLp);
         selectedLps.push(maxLp.id);
         price = BigNumber.from(maxLp.price).add(price).toString();
@@ -580,6 +640,9 @@ app.get("/sell", async (req, res) => {
         });
       }
     }
+
+    // Store the last price
+    lastPrice = maxHeap.peek().price;
   }
 
   const fee = (price * poolFee) / 10000;
@@ -587,6 +650,13 @@ app.get("/sell", async (req, res) => {
   res.send({
     lps: selectedLps,
     price: BigNumber.from(price).sub(fee).toString(),
+    priceImpact: Math.floor(
+      BigNumber.from(firstPrice)
+        .sub(lastPrice)
+        .mul(10000)
+        .div(firstPrice)
+        .toNumber()
+    ),
   });
 });
 
