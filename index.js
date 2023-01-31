@@ -427,7 +427,7 @@ app.get("/buy", async (req, res) => {
       if (minLp.nfts.length > 0) {
         // Save the first sell price
         if (selectedLps.length == 0) {
-          firstPrice = maxLp.price;
+          firstPrice = minLp.price;
         }
 
         selectedLps.push(minLp.id);
@@ -474,8 +474,8 @@ app.get("/buy", async (req, res) => {
     lps: selectedLps,
     price: BigNumber.from(price).add(fee).toString(),
     priceImpact: Math.floor(
-      BigNumber.from(firstPrice)
-        .sub(lastPrice)
+      BigNumber.from(lastPrice)
+        .sub(firstPrice)
         .mul(10000)
         .div(firstPrice)
         .toNumber()
