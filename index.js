@@ -301,7 +301,7 @@ app.get("/swapExact", async (req, res) => {
 
     const lpId = utils.defaultAbiCoder
       .decode(["uint256"], getLPIDResponse)[0]
-      .toString();
+      .toNumber();
     selectedBuyLps.push(lpId);
 
     // Get the LP
@@ -467,7 +467,7 @@ app.get("/buyExact", async (req, res) => {
 
     const lpId = utils.defaultAbiCoder
       .decode(["uint256"], getLPIDResponse)[0]
-      .toString();
+      .toNumber();
     selectedLps.push(lpId);
 
     // Get the LP
