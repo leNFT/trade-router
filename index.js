@@ -223,7 +223,6 @@ app.get("/swap", async (req, res) => {
             .toNumber()
         )
       : 0,
-
     buyLps: selectedBuyLps,
     buyPrice: BigNumber.from(buyPrice).add(buyFee).toString(),
     buyPriceImpact: firstBuyPrice
