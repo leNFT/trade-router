@@ -602,7 +602,7 @@ app.get("/sell", async (req, res) => {
           id: maxLp.id,
           basePrice: nextSellPrice,
           price: BigNumber.from(nextSellPrice)
-            .mul(10000 - BigNumber.from(lp[0].fee).toNumber())
+            .mul(10000 - BigNumber.from(maxLp.fee).toNumber())
             .div(10000)
             .toString(),
           curve: maxLp.curve,
