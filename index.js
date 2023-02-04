@@ -403,6 +403,7 @@ app.get("/buy", async (req, res) => {
     while (selectedLps.length < buyAmount) {
       // if the lp with the lowest price has enough liquidity we add it to the response
       var minLp = minHeap.pop();
+      console.log("minLp", minLp);
       if (minLp === undefined) {
         break;
       }
@@ -668,19 +669,18 @@ function createNewTradingPoolSubscription() {
 function poolLiquidityActivitySubscription(pool) {
   console.log("Creating liquidity activity subscription for ", pool);
 
-  const addLiquidityTopic =
-    "0x3b67bb924a0e01cd52df231e47e53b28799a0f34d0ea653d1778cf3969492c1e";
-  const removeLiquidityTopic =
-    "0xdfdd120ded9b7afc0c23dd5310e93aaa3e1c3b9f75af9b805fab3030842439f2";
-
   // Create a websocket to listen to a pools activity
   const addLiquidityPoolActivityFilter = {
     address: pool,
-    topics: [addLiquidityTopic],
+    topics: [
+      utils.id(
+        "AddLiquidity(address,uint256,uint256[],uint256,uint256,address,uint256,uint256)"
+      ),
+    ],
   };
   const removeLiquidityPoolActivityFilter = {
     address: pool,
-    topics: [removeLiquidityTopic],
+    topics: [utils.id("RemoveLiquidity(address,uint256)")],
   };
 
   alchemy.ws.on(addLiquidityPoolActivityFilter, async (log, event) => {
@@ -710,8 +710,10 @@ function poolLiquidityActivitySubscription(pool) {
     maxHeaps[pool].push({
       id: lpId,
       basePrice: currentPrice,
-      price:
-        (currentPrice * (10000 - BigNumber.from(lp[0].fee).toString())) / 10000,
+      price: BigNumber.from(currentPrice)
+        .mul(10000 - BigNumber.from(lp[0].fee).toNumber())
+        .div(10000)
+        .toString(),
       curve: lp[0].curve,
       delta: BigNumber.from(lp[0].delta).toString(),
       tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
@@ -737,8 +739,10 @@ function poolLiquidityActivitySubscription(pool) {
     minHeaps[pool].push({
       id: lpId,
       basePrice: buyPrice,
-      price:
-        (buyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
+      price: BigNumber.from(buyPrice)
+        .mul(10000 + BigNumber.from(lp[0].fee).toNumber())
+        .div(10000)
+        .toString(),
       curve: lp[0].curve,
       delta: BigNumber.from(lp[0].delta).toString(),
       tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
