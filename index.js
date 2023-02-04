@@ -122,7 +122,7 @@ app.get("/swap", async (req, res) => {
           id: maxLp.id,
           basePrice: nextSellPrice,
           price: BigNumber.from(nextSellPrice)
-            .mul(10000 - BigNumber.from(lp[0].fee).toNumber())
+            .mul(10000 - BigNumber.from(maxLp.fee).toNumber())
             .div(10000)
             .toString(),
           curve: maxLp.curve,
@@ -188,7 +188,7 @@ app.get("/swap", async (req, res) => {
           id: minLp.id,
           basePrice: nextBuyPrice,
           price: BigNumber.from(nextBuyPrice)
-            .mul(10000 + BigNumber.from(lp[0].fee).toNumber())
+            .mul(10000 + BigNumber.from(minLp.fee).toNumber())
             .div(10000)
             .toString(),
           curve: minLp.curve,
@@ -305,7 +305,7 @@ app.get("/swapExact", async (req, res) => {
           delta: BigNumber.from(maxLp.delta).toString(),
           basePrice: nextSellPrice,
           price: BigNumber.from(nextSellPrice)
-            .mul(10000 - BigNumber.from(lp[0].fee).toNumber())
+            .mul(10000 - BigNumber.from(maxLp.fee).toNumber())
             .div(10000)
             .toString(),
           tokenAmount: BigNumber.from(maxLp.tokenAmount)
