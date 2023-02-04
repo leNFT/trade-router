@@ -27,8 +27,6 @@ export async function setInitialState(chainId) {
   const alchemy = new Alchemy(alchemySettings);
 
   // Initial Setup
-  const createTradingPoolTopic =
-    "0xa1311e5e3c1c2207844ec9211cb2439ea0bce2a76c6ea09d9343f0d0eaddd9f6";
   const addLiquidityTopic =
     "0x3b67bb924a0e01cd52df231e47e53b28799a0f34d0ea653d1778cf3969492c1e";
   const removeLiquidityTopic =
@@ -41,7 +39,7 @@ export async function setInitialState(chainId) {
     address: addresses.TradingPoolFactory,
     fromBlock: "earliest",
     toBlock: "latest",
-    topics: [createTradingPoolTopic],
+    topics: [utils.id("CreateTradingPool(address,address,address)")],
   });
 
   for (let i = 0; i < createTradingPoolResponse.length; i++) {
@@ -69,7 +67,11 @@ export async function setInitialState(chainId) {
       address: tradingPool,
       fromBlock: "earliest",
       toBlock: "latest",
-      topics: [addLiquidityTopic],
+      topics: [
+        utils.id(
+          "AddLiquidity(address,uint256,uint256[],uint256,uint256,address,uint256,uint256)"
+        ),
+      ],
     });
 
     for (let i = 0; i < addLiquidityResponse.length; i++) {
@@ -89,7 +91,7 @@ export async function setInitialState(chainId) {
       address: tradingPool,
       fromBlock: "earliest",
       toBlock: "latest",
-      topics: [removeLiquidityTopic],
+      topics: [utils.id("RemoveLiquidity(address,uint256)")],
     });
 
     for (let i = 0; i < removedLiquidityResponse.length; i++) {
@@ -135,9 +137,11 @@ export async function setInitialState(chainId) {
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
         nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
         basePrice: currentPrice,
-        price:
-          (currentPrice * (10000 - BigNumber.from(lp[0].fee).toString())) /
-          10000,
+        price: BigNumber.from(currentPrice)
+          .mul(10000 - BigNumber.from(lp[0].fee).toNumber())
+          .div(10000)
+          .toString(),
+
         curve: lp[0].curve,
         delta: BigNumber.from(lp[0].delta).toString(),
         fee: BigNumber.from(lp[0].fee).toString(),
@@ -163,8 +167,10 @@ export async function setInitialState(chainId) {
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
         nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
         basePrice: buyPrice,
-        price:
-          (buyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
+        price: BigNumber.from(buyPrice)
+          .mul(10000 + BigNumber.from(lp[0].fee).toNumber())
+          .div(10000)
+          .toString(),
         curve: lp[0].curve,
         delta: BigNumber.from(lp[0].delta).toString(),
         fee: BigNumber.from(lp[0].fee).toString(),

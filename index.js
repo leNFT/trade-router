@@ -78,22 +78,6 @@ app.get("/swap", async (req, res) => {
     return;
   }
 
-  // Find each pool's swap fee
-  const getSellPoolFeeResponse = await alchemy.core.call({
-    to: sellPool,
-    data: getSwapFeeFunctionSig,
-  });
-  const sellPoolFee = utils.defaultAbiCoder
-    .decode(["uint256"], getSellPoolFeeResponse)[0]
-    .toNumber();
-  const getBuyPoolFeeResponse = await alchemy.core.call({
-    to: buyPool,
-    data: getSwapFeeFunctionSig,
-  });
-  const buyPoolFee = utils.defaultAbiCoder
-    .decode(["uint256"], getBuyPoolFeeResponse)[0]
-    .toNumber();
-
   // Find the most expensive pool to sell into
   if (maxHeaps[sellPool]) {
     var maxHeap = maxHeaps[sellPool].clone();
@@ -137,7 +121,10 @@ app.get("/swap", async (req, res) => {
         maxHeap.push({
           id: maxLp.id,
           basePrice: nextSellPrice,
-          price: (nextSellPrice * (10000 - maxLp.fee)) / 10000,
+          price: BigNumber.from(nextSellPrice)
+            .mul(10000 - BigNumber.from(lp[0].fee).toNumber())
+            .div(10000)
+            .toString(),
           curve: maxLp.curve,
           delta: BigNumber.from(maxLp.delta).toString(),
           tokenAmount: BigNumber.from(maxLp.tokenAmount)
@@ -200,7 +187,10 @@ app.get("/swap", async (req, res) => {
         minHeap.push({
           id: minLp.id,
           basePrice: nextBuyPrice,
-          price: (nextBuyPrice * (10000 + minLp.fee)) / 10000,
+          price: BigNumber.from(nextBuyPrice)
+            .mul(10000 + BigNumber.from(lp[0].fee).toNumber())
+            .div(10000)
+            .toString(),
           curve: minLp.curve,
           delta: BigNumber.from(minLp.delta).toString(),
           tokenAmount: BigNumber.from(minLp.tokenAmount).toString(),
@@ -314,7 +304,10 @@ app.get("/swapExact", async (req, res) => {
           curve: maxLp.curve,
           delta: BigNumber.from(maxLp.delta).toString(),
           basePrice: nextSellPrice,
-          price: (nextSellPrice * (10000 - maxLp.fee)) / 10000,
+          price: BigNumber.from(nextSellPrice)
+            .mul(10000 - BigNumber.from(lp[0].fee).toNumber())
+            .div(10000)
+            .toString(),
           tokenAmount: BigNumber.from(maxLp.tokenAmount)
             .sub(maxLp.price)
             .toString(),
@@ -373,9 +366,11 @@ app.get("/swapExact", async (req, res) => {
       .decode(["uint256"], getPriceAfterBuyResponse)[0]
       .toString();
     console.log("nextBuyPrice", nextBuyPrice);
-    buyPrice =
-      buyPrice +
-      (nextBuyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000;
+    buyPrice = BigNumber.from(buyPrice)
+      .add(
+        (nextBuyPrice * (10000 + BigNumber.from(lp[0].fee).toNumber())) / 10000
+      )
+      .toString();
 
     selectedLpBuyPrice[lpId] = nextBuyPrice;
   }
@@ -397,7 +392,7 @@ app.get("/buy", async (req, res) => {
   const priceAfterBuyFunctionSig = "0xbb1690e2";
   var selectedLps = [];
   var exampleNFTs = [];
-  var priceSum = 0;
+  var priceSum = "0";
   var firstPrice = 0;
   var lastPrice = 0;
 
@@ -418,7 +413,8 @@ app.get("/buy", async (req, res) => {
         }
 
         selectedLps.push(minLp.id);
-        priceSum = BigNumber.from(minLp.price).add(price).toString();
+        console.log("minLp", minLp);
+        priceSum = BigNumber.from(minLp.price).add(priceSum).toString();
         exampleNFTs.push(
           BigNumber.from(minLp.nfts[minLp.nfts.length - 1]).toNumber()
         );
@@ -561,7 +557,6 @@ app.get("/sell", async (req, res) => {
   await cors(req, res);
   const sellAmount = req.query["amount"];
   const priceAfterSellFunctionSig = "0x6d31f2ca";
-  const getSwapFeeFunctionSig = "0xd4cadf68";
   const pool = req.query["pool"];
   var selectedLps = [];
   var price = 0;
@@ -606,7 +601,10 @@ app.get("/sell", async (req, res) => {
         maxHeap.push({
           id: maxLp.id,
           basePrice: nextSellPrice,
-          price: (nextSellPrice * (10000 - maxLp.fee).toString()) / 10000,
+          price: BigNumber.from(nextSellPrice)
+            .mul(10000 - BigNumber.from(lp[0].fee).toNumber())
+            .div(10000)
+            .toString(),
           curve: maxLp.curve,
           delta: BigNumber.from(maxLp.delta).toString(),
           tokenAmount: BigNumber.from(maxLp.tokenAmount)
