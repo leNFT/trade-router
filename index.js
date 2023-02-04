@@ -542,9 +542,11 @@ app.get("/buyExact", async (req, res) => {
       .decode(["uint256"], getPriceAfterBuyResponse)[0]
       .toString();
     console.log("nextBuyPrice", nextBuyPrice);
-    priceSum = BigNumber.from(priceSum).add(
-      (nextBuyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000
-    );
+    priceSum = BigNumber.from(priceSum)
+      .add(
+        (nextBuyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000
+      )
+      .toString();
     selectedLpBuyPrice[lpId] = nextBuyPrice;
   }
 
