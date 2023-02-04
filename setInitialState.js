@@ -132,11 +132,15 @@ export async function setInitialState(chainId) {
       console.log("currentPrice", currentPrice);
       maxHeaps[tradingPool].push({
         id: lpId,
-        price: currentPrice,
-        curve: lp[0].curve,
-        delta: BigNumber.from(lp[0].delta).toString(),
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
         nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+        basePrice: currentPrice,
+        price:
+          (currentPrice * (10000 - BigNumber.from(lp[0].fee).toString())) /
+          10000,
+        curve: lp[0].curve,
+        delta: BigNumber.from(lp[0].delta).toString(),
+        fee: BigNumber.from(lp[0].fee).toString(),
       });
 
       // Get buy price and add it to the heap
@@ -156,11 +160,14 @@ export async function setInitialState(chainId) {
       console.log("buyPrice", buyPrice);
       minHeaps[tradingPool].push({
         id: lpId,
-        price: buyPrice,
-        curve: lp[0].curve,
-        delta: BigNumber.from(lp[0].delta).toString(),
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
         nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+        basePrice: buyPrice,
+        price:
+          (buyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
+        curve: lp[0].curve,
+        delta: BigNumber.from(lp[0].delta).toString(),
+        fee: BigNumber.from(lp[0].fee).toString(),
       });
     }
   }

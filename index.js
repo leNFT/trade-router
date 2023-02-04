@@ -41,6 +41,7 @@ createNewTradingPoolSubscription();
 tradingPools.forEach((pool) => {
   poolTradingActivitySubscription(pool);
   poolLiquidityActivitySubscription(pool);
+  poolUserActivitySubscription(pool);
 });
 
 // Setup swap router endpoint
@@ -53,7 +54,6 @@ app.get("/swap", async (req, res) => {
   const buyPool = req.query["buyPool"];
   const priceAfterSellFunctionSig = "0x6d31f2ca";
   const priceAfterBuyFunctionSig = "0xbb1690e2";
-  const getSwapFeeFunctionSig = "0xd4cadf68";
   var buyPrice = 0;
   var sellPrice = 0;
   var selectedSellLps = [];
@@ -122,7 +122,9 @@ app.get("/swap", async (req, res) => {
           to: maxLp.curve,
           data:
             priceAfterSellFunctionSig +
-            utils.defaultAbiCoder.encode(["uint256"], [maxLp.price]).slice(2) +
+            utils.defaultAbiCoder
+              .encode(["uint256"], [maxLp.basePrice])
+              .slice(2) +
             utils.defaultAbiCoder
               .encode(["uint256"], [BigNumber.from(maxLp.delta).toString()])
               .slice(2),
@@ -134,13 +136,15 @@ app.get("/swap", async (req, res) => {
         console.log("nextSellPrice", nextSellPrice);
         maxHeap.push({
           id: maxLp.id,
-          price: nextSellPrice,
+          basePrice: nextSellPrice,
+          price: (nextSellPrice * (10000 - maxLp.fee)) / 10000,
           curve: maxLp.curve,
           delta: BigNumber.from(maxLp.delta).toString(),
           tokenAmount: BigNumber.from(maxLp.tokenAmount)
             .sub(maxLp.price)
             .toString(),
           nfts: maxLp.nfts,
+          fee: maxLp.fee,
         });
       }
     }
@@ -181,7 +185,9 @@ app.get("/swap", async (req, res) => {
           to: minLp.curve,
           data:
             priceAfterBuyFunctionSig +
-            utils.defaultAbiCoder.encode(["uint256"], [minLp.price]).slice(2) +
+            utils.defaultAbiCoder
+              .encode(["uint256"], [minLp.basePrice])
+              .slice(2) +
             utils.defaultAbiCoder
               .encode(["uint256"], [BigNumber.from(minLp.delta).toString()])
               .slice(2),
@@ -193,11 +199,13 @@ app.get("/swap", async (req, res) => {
         console.log("nextBuyPrice", nextBuyPrice);
         minHeap.push({
           id: minLp.id,
-          price: nextBuyPrice,
+          basePrice: nextBuyPrice,
+          price: (nextBuyPrice * (10000 + minLp.fee)) / 10000,
           curve: minLp.curve,
           delta: BigNumber.from(minLp.delta).toString(),
           tokenAmount: BigNumber.from(minLp.tokenAmount).toString(),
           nfts: minLp.nfts.slice(0, -1),
+          fee: minLp.fee,
         });
       }
     }
@@ -208,12 +216,9 @@ app.get("/swap", async (req, res) => {
     }
   }
 
-  const buyFee = (buyPrice * buyPoolFee) / 10000;
-  const sellFee = (sellPrice * sellPoolFee) / 10000;
-
   res.send({
     sellLps: selectedSellLps,
-    sellPrice: BigNumber.from(sellPrice).sub(sellFee).toString(),
+    sellPrice: sellPrice,
     sellPriceImpact: firstSellPrice
       ? Math.floor(
           BigNumber.from(firstSellPrice)
@@ -224,7 +229,7 @@ app.get("/swap", async (req, res) => {
         )
       : 0,
     buyLps: selectedBuyLps,
-    buyPrice: BigNumber.from(buyPrice).add(buyFee).toString(),
+    buyPrice: buyPrice,
     buyPriceImpact: firstBuyPrice
       ? Math.floor(
           BigNumber.from(lastBuyPrice)
@@ -249,7 +254,6 @@ app.get("/swapExact", async (req, res) => {
   const priceAfterSellFunctionSig = "0x6d31f2ca";
   const priceAfterBuyFunctionSig = "0xbb1690e2";
   const getLpFunctionSig = "0xcdd3f298";
-  const getSwapFeeFunctionSig = "0xd4cadf68";
   const nftToLpFunctionSig = "0x5460d849";
   var buyPrice = 0;
   var sellPrice = 0;
@@ -270,22 +274,6 @@ app.get("/swapExact", async (req, res) => {
     });
     return;
   }
-
-  // Find each pool's swap fee
-  const getSellPoolFeeResponse = await alchemy.core.call({
-    to: sellPool,
-    data: getSwapFeeFunctionSig,
-  });
-  const sellPoolFee = utils.defaultAbiCoder
-    .decode(["uint256"], getSellPoolFeeResponse)[0]
-    .toNumber();
-  const getBuyPoolFeeResponse = await alchemy.core.call({
-    to: buyPool,
-    data: getSwapFeeFunctionSig,
-  });
-  const buyPoolFee = utils.defaultAbiCoder
-    .decode(["uint256"], getBuyPoolFeeResponse)[0]
-    .toNumber();
 
   // Find the most expensive pool to sell into
   if (maxHeaps[sellPool]) {
@@ -309,7 +297,9 @@ app.get("/swapExact", async (req, res) => {
           to: maxLp.curve,
           data:
             priceAfterSellFunctionSig +
-            utils.defaultAbiCoder.encode(["uint256"], [maxLp.price]).slice(2) +
+            utils.defaultAbiCoder
+              .encode(["uint256"], [maxLp.basePrice])
+              .slice(2) +
             utils.defaultAbiCoder
               .encode(["uint256"], [BigNumber.from(maxLp.delta).toString()])
               .slice(2),
@@ -321,13 +311,15 @@ app.get("/swapExact", async (req, res) => {
         console.log("nextSellPrice", nextSellPrice);
         maxHeap.push({
           id: maxLp.id,
-          price: nextSellPrice,
           curve: maxLp.curve,
           delta: BigNumber.from(maxLp.delta).toString(),
+          basePrice: nextSellPrice,
+          price: (nextSellPrice * (10000 - maxLp.fee)) / 10000,
           tokenAmount: BigNumber.from(maxLp.tokenAmount)
             .sub(maxLp.price)
             .toString(),
           nfts: maxLp.nfts,
+          fee: maxLp.fee,
         });
       }
     }
@@ -336,7 +328,7 @@ app.get("/swapExact", async (req, res) => {
   // Find the price for the selected buy NFTs
   for (var i = 0; i < buyNFTs.length; i++) {
     // Get the LP for the token
-    var price = 0;
+    var basePrice = 0;
     const getLPIDResponse = await alchemy.core.call({
       to: buyPool,
       data:
@@ -361,9 +353,9 @@ app.get("/swapExact", async (req, res) => {
     const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
     console.log("lp", lp);
     if (selectedLpBuyPrice[lpId] === undefined) {
-      price = lp[0].price;
+      basePrice = lp[0].price;
     } else {
-      price = selectedLpBuyPrice[lpId];
+      basePrice = selectedLpBuyPrice[lpId];
     }
 
     // Add lp with update buy price to min lp
@@ -372,29 +364,27 @@ app.get("/swapExact", async (req, res) => {
       to: lp[0].curve,
       data:
         priceAfterBuyFunctionSig +
-        utils.defaultAbiCoder.encode(["uint256"], [price]).slice(2) +
+        utils.defaultAbiCoder.encode(["uint256"], [basePrice]).slice(2) +
         utils.defaultAbiCoder
           .encode(["uint256"], [BigNumber.from(lp[0].delta).toString()])
           .slice(2),
     });
-
     const nextBuyPrice = utils.defaultAbiCoder
       .decode(["uint256"], getPriceAfterBuyResponse)[0]
       .toString();
     console.log("nextBuyPrice", nextBuyPrice);
-    buyPrice = BigNumber.from(buyPrice).add(nextBuyPrice).toString();
+    buyPrice =
+      buyPrice +
+      (nextBuyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000;
 
     selectedLpBuyPrice[lpId] = nextBuyPrice;
   }
 
-  const buyFee = (buyPrice * buyPoolFee) / 10000;
-  const sellFee = (sellPrice * sellPoolFee) / 10000;
-
   res.send({
     sellLps: selectedSellLps,
-    sellPrice: BigNumber.from(sellPrice).sub(sellFee).toString(),
+    sellPrice: sellPrice,
     buyLps: selectedBuyLps,
-    buyPrice: BigNumber.from(buyPrice).add(buyFee).toString(),
+    buyPrice: buyPrice,
   });
 });
 
@@ -408,19 +398,9 @@ app.get("/buy", async (req, res) => {
   const getSwapFeeFunctionSig = "0xd4cadf68";
   var selectedLps = [];
   var exampleNFTs = [];
-  var price = 0;
+  var priceSum = 0;
   var firstPrice = 0;
   var lastPrice = 0;
-
-  // Find pool swap fee
-  const getPoolFeeResponse = await alchemy.core.call({
-    to: pool,
-    data: getSwapFeeFunctionSig,
-  });
-  const poolFee = utils.defaultAbiCoder
-    .decode(["uint256"], getPoolFeeResponse)[0]
-    .toNumber();
-  console.log("poolFee", poolFee);
 
   // Clone the heap so we can change it freely
   if (minHeaps[pool]) {
@@ -439,7 +419,7 @@ app.get("/buy", async (req, res) => {
         }
 
         selectedLps.push(minLp.id);
-        price = BigNumber.from(minLp.price).add(price).toString();
+        priceSum = BigNumber.from(minLp.price).add(price).toString();
         exampleNFTs.push(
           BigNumber.from(minLp.nfts[minLp.nfts.length - 1]).toNumber()
         );
@@ -450,7 +430,9 @@ app.get("/buy", async (req, res) => {
           to: minLp.curve,
           data:
             priceAfterBuyFunctionSig +
-            utils.defaultAbiCoder.encode(["uint256"], [minLp.price]).slice(2) +
+            utils.defaultAbiCoder
+              .encode(["uint256"], [minLp.basePrice])
+              .slice(2) +
             utils.defaultAbiCoder
               .encode(["uint256"], [BigNumber.from(minLp.delta).toString()])
               .slice(2),
@@ -462,11 +444,15 @@ app.get("/buy", async (req, res) => {
         console.log("nextBuyPrice", nextBuyPrice);
         minHeap.push({
           id: minLp.id,
-          price: nextBuyPrice,
+          basePrice: nextBuyPrice,
+          price:
+            (nextBuyPrice * (10000 + BigNumber.from(minLp.fee).toString())) /
+            10000,
           curve: minLp.curve,
           delta: BigNumber.from(minLp.delta).toString(),
           tokenAmount: BigNumber.from(minLp.tokenAmount).toString(),
           nfts: minLp.nfts.slice(0, -1),
+          fee: minLp.fee,
         });
       }
     }
@@ -477,12 +463,9 @@ app.get("/buy", async (req, res) => {
     }
   }
 
-  const fee = (price * poolFee) / 10000;
-  console.log("buyFee", fee);
-
   res.send({
     lps: selectedLps,
-    price: BigNumber.from(price).add(fee).toString(),
+    price: priceSum,
     priceImpact: firstPrice
       ? Math.floor(
           BigNumber.from(lastPrice)
@@ -503,27 +486,17 @@ app.get("/buyExact", async (req, res) => {
   const nfts = req.query["nfts"].split(",");
   const pool = req.query["pool"];
   const priceAfterBuyFunctionSig = "0xbb1690e2";
-  const getSwapFeeFunctionSig = "0xd4cadf68";
   const nftToLpFunctionSig = "0x5460d849";
   const getLpFunctionSig = "0xcdd3f298";
   var selectedLps = [];
   var selectedLpBuyPrice = {};
   var priceSum = 0;
 
-  // Find pool swap fee
-  const getPoolFeeResponse = await alchemy.core.call({
-    to: pool,
-    data: getSwapFeeFunctionSig,
-  });
-  const poolFee = utils.defaultAbiCoder
-    .decode(["uint256"], getPoolFeeResponse)[0]
-    .toNumber();
-  console.log("poolFee", poolFee);
   console.log("nfts", nfts);
 
   for (var i = 0; i < nfts.length; i++) {
     // Get the LP for the token
-    var price = 0;
+    var basePrice = 0;
     const getLPIDResponse = await alchemy.core.call({
       to: pool,
       data:
@@ -548,9 +521,9 @@ app.get("/buyExact", async (req, res) => {
     const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
     console.log("lp", lp);
     if (selectedLpBuyPrice[lpId] === undefined) {
-      price = lp[0].price;
+      basePrice = lp[0].price;
     } else {
-      price = selectedLpBuyPrice[lpId];
+      basePrice = selectedLpBuyPrice[lpId];
     }
 
     // Add lp with update buy price to min lp
@@ -559,7 +532,7 @@ app.get("/buyExact", async (req, res) => {
       to: lp[0].curve,
       data:
         priceAfterBuyFunctionSig +
-        utils.defaultAbiCoder.encode(["uint256"], [price]).slice(2) +
+        utils.defaultAbiCoder.encode(["uint256"], [basePrice]).slice(2) +
         utils.defaultAbiCoder
           .encode(["uint256"], [BigNumber.from(lp[0].delta).toString()])
           .slice(2),
@@ -569,17 +542,16 @@ app.get("/buyExact", async (req, res) => {
       .decode(["uint256"], getPriceAfterBuyResponse)[0]
       .toString();
     console.log("nextBuyPrice", nextBuyPrice);
-    priceSum = BigNumber.from(priceSum).add(nextBuyPrice).toString();
+    priceSum =
+      priceSum +
+      (nextBuyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000;
 
     selectedLpBuyPrice[lpId] = nextBuyPrice;
   }
 
-  const fee = (priceSum * poolFee) / 10000;
-  console.log("buyFee", fee);
-
   res.send({
     lps: selectedLps,
-    price: BigNumber.from(priceSum).add(fee).toString(),
+    price: priceSum,
   });
 });
 
@@ -595,15 +567,6 @@ app.get("/sell", async (req, res) => {
   var price = 0;
   var firstPrice = 0;
   var lastPrice = 0;
-
-  // Find pool swap fee
-  const getPoolFeeResponse = await alchemy.core.call({
-    to: pool,
-    data: getSwapFeeFunctionSig,
-  });
-  const poolFee = utils.defaultAbiCoder
-    .decode(["uint256"], getPoolFeeResponse)[0]
-    .toNumber();
 
   // Clone the heap so we can change it freely
   if (maxHeaps[pool]) {
@@ -642,13 +605,15 @@ app.get("/sell", async (req, res) => {
         console.log("nextSellPriddce", nextSellPrice);
         maxHeap.push({
           id: maxLp.id,
-          price: nextSellPrice,
+          basePrice: nextSellPrice,
+          price: (nextSellPrice * (10000 - maxLp.fee).toString()) / 10000,
           curve: maxLp.curve,
           delta: BigNumber.from(maxLp.delta).toString(),
           tokenAmount: BigNumber.from(maxLp.tokenAmount)
             .sub(maxLp.price)
             .toString(),
           nfts: maxLp.nfts,
+          fee: maxLp.fee,
         });
       }
     }
@@ -659,11 +624,9 @@ app.get("/sell", async (req, res) => {
     }
   }
 
-  const fee = (price * poolFee) / 10000;
-
   res.send({
     lps: selectedLps,
-    price: BigNumber.from(price).sub(fee).toString(),
+    price: price,
     priceImpact: firstPrice
       ? Math.floor(
           BigNumber.from(firstPrice)
@@ -674,11 +637,6 @@ app.get("/sell", async (req, res) => {
         )
       : 0,
   });
-});
-
-// Listen to new connections
-app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
 });
 
 function createNewTradingPoolSubscription() {
@@ -753,11 +711,14 @@ function poolLiquidityActivitySubscription(pool) {
     console.log("currentPrice", currentPrice);
     maxHeaps[pool].push({
       id: lpId,
-      price: currentPrice,
+      basePrice: currentPrice,
+      price:
+        (currentPrice * (10000 - BigNumber.from(lp[0].fee).toString())) / 10000,
       curve: lp[0].curve,
       delta: BigNumber.from(lp[0].delta).toString(),
       tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
       nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+      fee: BigNumber.from(lp[0].fee).toString(),
     });
 
     // Get buy price and add it to the heap
@@ -777,11 +738,14 @@ function poolLiquidityActivitySubscription(pool) {
     console.log("buyPrice", buyPrice);
     minHeaps[pool].push({
       id: lpId,
-      price: buyPrice,
+      basePrice: buyPrice,
+      price:
+        (buyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
       curve: lp[0].curve,
       delta: BigNumber.from(lp[0].delta).toString(),
       tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
       nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+      fee: BigNumber.from(lp[0].fee).toString(),
     });
 
     console.log("addedliquidity. maxHeaps:", maxHeaps[pool].heapArray);
@@ -884,11 +848,15 @@ function poolTradingActivitySubscription(pool) {
       console.log("currentPrice", currentPrice);
       maxHeaps[pool].push({
         id: lpId,
-        price: currentPrice,
+        basePrice: currentPrice,
+        price:
+          (currentPrice * (10000 - BigNumber.from(lp[0].fee).toString())) /
+          10000,
         curve: lp[0].curve,
         delta: BigNumber.from(lp[0].delta).toString(),
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
         nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+        fee: BigNumber.from(lp[0].fee).toString(),
       });
 
       // Get buy price and add it to the heap
@@ -908,11 +876,14 @@ function poolTradingActivitySubscription(pool) {
       console.log("buyPrice", buyPrice);
       minHeaps[pool].push({
         id: lpId,
-        price: buyPrice,
+        basePrice: buyPrice,
+        price:
+          (buyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
         curve: lp[0].curve,
         delta: BigNumber.from(lp[0].delta).toString(),
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
         nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+        fee: BigNumber.from(lp[0].fee).toString(),
       });
     }
   }
@@ -938,3 +909,119 @@ function poolTradingActivitySubscription(pool) {
     await updateLPWithLog(log, "buy");
   });
 }
+
+function poolUserActivitySubscription(pool) {
+  console.log("Creating trading activity subscription for ", pool);
+
+  // Update LP from logs
+  async function updateLPWithLog(log) {
+    const getLpFunctionSig = "0xcdd3f298";
+    const priceAfterBuyFunctionSig = "0xbb1690e2";
+    // Emitted whenever a new user activity is done in a pool
+    const iface = new utils.Interface(tradingPoolContract.abi);
+    const decodedLog = iface.parseLog({ data: log.data, topics: log.topics });
+    console.log("decodedLog", decodedLog);
+    const lpId = decodedLog.args.lpId;
+    console.log("lpId: ", lpId);
+
+    // Find LP in heaps' liquidity positions
+    const nftMaxHeapLpIndex = maxHeaps[pool].heapArray.findIndex(
+      (el) => el.id == lpId
+    );
+    const nftMinHeapLpIndex = minHeaps[pool].heapArray.findIndex(
+      (el) => el.id == lpId
+    );
+
+    // Remove LP from heaps
+    maxHeaps[pool].remove(maxHeaps[pool].heapArray[nftMaxHeapLpIndex]);
+    minHeaps[pool].remove(minHeaps[pool].heapArray[nftMinHeapLpIndex]);
+
+    const getNewLpResponse = await alchemy.core.call({
+      to: pool,
+      data:
+        getLpFunctionSig +
+        utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
+    });
+
+    const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
+    console.log("lp", lp);
+
+    // Get current (sell) price and add it to the max heap
+    const currentPrice = BigNumber.from(lp[0].price).toString();
+    console.log("currentPrice", currentPrice);
+    maxHeaps[pool].push({
+      id: lpId,
+      basePrice: currentPrice,
+      price:
+        (currentPrice * (10000 - BigNumber.from(lp[0].fee).toString())) / 10000,
+      curve: lp[0].curve,
+      delta: BigNumber.from(lp[0].delta).toString(),
+      tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
+      nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+      fee: BigNumber.from(lp[0].fee).toString(),
+    });
+
+    // Get buy price and add it to the heap
+    const getPriceAfterBuyResponse = await alchemy.core.call({
+      to: lp[0].curve,
+      data:
+        priceAfterBuyFunctionSig +
+        utils.defaultAbiCoder.encode(["uint256"], [currentPrice]).slice(2) +
+        utils.defaultAbiCoder
+          .encode(["uint256"], [BigNumber.from(lp[0].delta).toString()])
+          .slice(2),
+    });
+
+    const buyPrice = utils.defaultAbiCoder
+      .decode(["uint256"], getPriceAfterBuyResponse)[0]
+      .toString();
+    console.log("buyPrice", buyPrice);
+    minHeaps[pool].push({
+      id: lpId,
+      basePrice: buyPrice,
+      price:
+        (buyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
+      curve: lp[0].curve,
+      delta: BigNumber.from(lp[0].delta).toString(),
+      tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
+      nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+      fee: BigNumber.from(lp[0].fee).toString(),
+    });
+  }
+
+  // Create two websocket to listen to a pools activity (buy and sell)
+  const setLpPricingCurveActivityFilter = {
+    address: pool,
+    topics: [utils.id("SetLpPricingCurve(address,uint256,address,uint256)")],
+  };
+
+  const setLpPriceActivityFilter = {
+    address: pool,
+    topics: [utils.id("SetLpPrice(address,uint256,uint256)")],
+  };
+
+  const setLpFeeActivityFilter = {
+    address: pool,
+    topics: [utils.id("SetLpFee(address,uint256,uint256)")],
+  };
+
+  alchemy.ws.on(setLpPricingCurveActivityFilter, async (log, event) => {
+    console.log("Got new lp edit pricing curve activity");
+    await updateLPWithLog(log);
+  });
+
+  alchemy.ws.on(setLpPriceActivityFilter, async (log, event) => {
+    console.log("Got new lp edit price activity");
+    await updateLPWithLog(log);
+  });
+
+  alchemy.ws.on(setLpFeeActivityFilter, async (log, event) => {
+    console.log("Got new lp edit fee activity");
+    await updateLPWithLog(log);
+  });
+}
+
+// Listen to new connections
+app.listen(port, () => {
+  console.log(`leNFT Trade Router listening on port ${port}`);
+});
