@@ -395,7 +395,6 @@ app.get("/buy", async (req, res) => {
   const buyAmount = req.query["amount"];
   const pool = req.query["pool"];
   const priceAfterBuyFunctionSig = "0xbb1690e2";
-  const getSwapFeeFunctionSig = "0xd4cadf68";
   var selectedLps = [];
   var exampleNFTs = [];
   var priceSum = 0;
@@ -446,7 +445,7 @@ app.get("/buy", async (req, res) => {
           id: minLp.id,
           basePrice: nextBuyPrice,
           price:
-            (nextBuyPrice * (10000 + BigNumber.from(minLp.fee).toString())) /
+            (nextBuyPrice * (10000 + BigNumber.from(minLp.fee).toNumber())) /
             10000,
           curve: minLp.curve,
           delta: BigNumber.from(minLp.delta).toString(),
