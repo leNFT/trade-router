@@ -490,7 +490,7 @@ app.get("/buyExact", async (req, res) => {
   const getLpFunctionSig = "0xcdd3f298";
   var selectedLps = [];
   var selectedLpBuyPrice = {};
-  var priceSum = 0;
+  var priceSum = "";
 
   console.log("nfts", nfts);
 
@@ -542,10 +542,9 @@ app.get("/buyExact", async (req, res) => {
       .decode(["uint256"], getPriceAfterBuyResponse)[0]
       .toString();
     console.log("nextBuyPrice", nextBuyPrice);
-    priceSum =
-      priceSum +
-      (nextBuyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000;
-
+    priceSum = BigNumber.from(priceSum).add(
+      (nextBuyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000
+    );
     selectedLpBuyPrice[lpId] = nextBuyPrice;
   }
 
