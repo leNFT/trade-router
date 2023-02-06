@@ -93,7 +93,7 @@ app.get("/swap", async (req, res) => {
         console.log("maxLp", maxLp);
         // Save the first sell price
         if (selectedSellLps.length == 0) {
-          firstSellPrice = maxLp.price;
+          firstSellPrice = maxLp.spotPrice;
         }
         // Add lp to selectedSellLps
         selectedSellLps.push(maxLp.id);
@@ -107,7 +107,7 @@ app.get("/swap", async (req, res) => {
           data:
             priceAfterSellFunctionSig +
             utils.defaultAbiCoder
-              .encode(["uint256"], [maxLp.basePrice])
+              .encode(["uint256"], [maxLp.spotPrice])
               .slice(2) +
             utils.defaultAbiCoder
               .encode(["uint256"], [BigNumber.from(maxLp.delta).toString()])
@@ -120,7 +120,7 @@ app.get("/swap", async (req, res) => {
         console.log("nextSellPrice", nextSellPrice);
         maxHeap.push({
           id: maxLp.id,
-          basePrice: nextSellPrice,
+          spotPrice: nextSellPrice,
           price: BigNumber.from(nextSellPrice)
             .mul(10000 - BigNumber.from(maxLp.fee).toNumber())
             .div(10000)
@@ -138,7 +138,7 @@ app.get("/swap", async (req, res) => {
 
     // Save the last sell price
     if (!maxHeap.isEmpty()) {
-      lastSellPrice = maxHeap.peek().price;
+      lastSellPrice = maxHeap.peek().spotPrice;
     }
   }
 
@@ -155,7 +155,7 @@ app.get("/swap", async (req, res) => {
       if (minLp.nfts.length > 0) {
         // Save the first buy price
         if (selectedBuyLps.length == 0) {
-          firstBuyPrice = minLp.price;
+          firstBuyPrice = minLp.spotPrice;
         }
         // Add lp to selectedBuyLps
         selectedBuyLps.push(minLp.id);
@@ -173,7 +173,7 @@ app.get("/swap", async (req, res) => {
           data:
             priceAfterBuyFunctionSig +
             utils.defaultAbiCoder
-              .encode(["uint256"], [minLp.basePrice])
+              .encode(["uint256"], [minLp.spotPrice])
               .slice(2) +
             utils.defaultAbiCoder
               .encode(["uint256"], [BigNumber.from(minLp.delta).toString()])
@@ -186,14 +186,16 @@ app.get("/swap", async (req, res) => {
         console.log("nextBuyPrice", nextBuyPrice);
         minHeap.push({
           id: minLp.id,
-          basePrice: nextBuyPrice,
+          spotPrice: nextBuyPrice,
           price: BigNumber.from(nextBuyPrice)
-            .mul(10000 + BigNumber.from(minLp.fee).toNumber())
+            .mul(10000 + BigNumber(minLp.fee).toNumber())
             .div(10000)
             .toString(),
           curve: minLp.curve,
           delta: BigNumber.from(minLp.delta).toString(),
-          tokenAmount: BigNumber.from(minLp.tokenAmount).toString(),
+          tokenAmount: BigNumber.from(minLp.tokenAmount)
+            .add(minLp.price)
+            .toString(),
           nfts: minLp.nfts.slice(0, -1),
           fee: minLp.fee,
         });
@@ -202,7 +204,7 @@ app.get("/swap", async (req, res) => {
 
     // Save the last buy price
     if (!minHeap.isEmpty()) {
-      lastBuyPrice = minHeap.peek().price;
+      lastBuyPrice = minHeap.peek().spotPrice;
     }
   }
 
@@ -288,7 +290,7 @@ app.get("/swapExact", async (req, res) => {
           data:
             priceAfterSellFunctionSig +
             utils.defaultAbiCoder
-              .encode(["uint256"], [maxLp.basePrice])
+              .encode(["uint256"], [maxLp.spotPrice])
               .slice(2) +
             utils.defaultAbiCoder
               .encode(["uint256"], [BigNumber.from(maxLp.delta).toString()])
@@ -303,7 +305,7 @@ app.get("/swapExact", async (req, res) => {
           id: maxLp.id,
           curve: maxLp.curve,
           delta: BigNumber.from(maxLp.delta).toString(),
-          basePrice: nextSellPrice,
+          spotPrice: nextSellPrice,
           price: BigNumber.from(nextSellPrice)
             .mul(10000 - BigNumber.from(maxLp.fee).toNumber())
             .div(10000)
@@ -321,7 +323,7 @@ app.get("/swapExact", async (req, res) => {
   // Find the price for the selected buy NFTs
   for (var i = 0; i < buyNFTs.length; i++) {
     // Get the LP for the token
-    var basePrice = 0;
+    var spotPrice = 0;
     const getLPIDResponse = await alchemy.core.call({
       to: buyPool,
       data:
@@ -346,10 +348,14 @@ app.get("/swapExact", async (req, res) => {
     const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
     console.log("lp", lp);
     if (selectedLpBuyPrice[lpId] === undefined) {
-      basePrice = lp[0].price;
+      spotPrice = lp[0].spotPrice;
     } else {
-      basePrice = selectedLpBuyPrice[lpId];
+      spotPrice = selectedLpBuyPrice[lpId];
     }
+
+    buyPrice = BigNumber.from(buyPrice)
+      .add((spotPrice * (10000 + BigNumber.from(lp[0].fee).toNumber())) / 10000)
+      .toString();
 
     // Add lp with update buy price to min lp
     // Get buy price and add it to the heap
@@ -357,7 +363,7 @@ app.get("/swapExact", async (req, res) => {
       to: lp[0].curve,
       data:
         priceAfterBuyFunctionSig +
-        utils.defaultAbiCoder.encode(["uint256"], [basePrice]).slice(2) +
+        utils.defaultAbiCoder.encode(["uint256"], [spotPrice]).slice(2) +
         utils.defaultAbiCoder
           .encode(["uint256"], [BigNumber.from(lp[0].delta).toString()])
           .slice(2),
@@ -366,11 +372,6 @@ app.get("/swapExact", async (req, res) => {
       .decode(["uint256"], getPriceAfterBuyResponse)[0]
       .toString();
     console.log("nextBuyPrice", nextBuyPrice);
-    buyPrice = BigNumber.from(buyPrice)
-      .add(
-        (nextBuyPrice * (10000 + BigNumber.from(lp[0].fee).toNumber())) / 10000
-      )
-      .toString();
 
     selectedLpBuyPrice[lpId] = nextBuyPrice;
   }
@@ -410,7 +411,7 @@ app.get("/buy", async (req, res) => {
       if (minLp.nfts.length > 0) {
         // Save the first sell price
         if (selectedLps.length == 0) {
-          firstPrice = minLp.price;
+          firstPrice = minLp.spotPrice;
         }
 
         selectedLps.push(minLp.id);
@@ -427,7 +428,7 @@ app.get("/buy", async (req, res) => {
           data:
             priceAfterBuyFunctionSig +
             utils.defaultAbiCoder
-              .encode(["uint256"], [minLp.basePrice])
+              .encode(["uint256"], [minLp.spotPrice])
               .slice(2) +
             utils.defaultAbiCoder
               .encode(["uint256"], [BigNumber.from(minLp.delta).toString()])
@@ -440,13 +441,15 @@ app.get("/buy", async (req, res) => {
         console.log("nextBuyPrice", nextBuyPrice);
         minHeap.push({
           id: minLp.id,
-          basePrice: nextBuyPrice,
+          spotPrice: nextBuyPrice,
           price:
             (nextBuyPrice * (10000 + BigNumber.from(minLp.fee).toNumber())) /
             10000,
           curve: minLp.curve,
           delta: BigNumber.from(minLp.delta).toString(),
-          tokenAmount: BigNumber.from(minLp.tokenAmount).toString(),
+          tokenAmount: BigNumber.from(minLp.tokenAmount)
+            .add(minLp.price)
+            .toString(),
           nfts: minLp.nfts.slice(0, -1),
           fee: minLp.fee,
         });
@@ -455,7 +458,7 @@ app.get("/buy", async (req, res) => {
 
     // Save the last sell price
     if (!minHeap.isEmpty()) {
-      lastPrice = minHeap.peek().price;
+      lastPrice = minHeap.peek().spotPrice;
     }
   }
 
@@ -492,7 +495,7 @@ app.get("/buyExact", async (req, res) => {
 
   for (var i = 0; i < nfts.length; i++) {
     // Get the LP for the token
-    var basePrice = 0;
+    var spotPrice = 0;
     const getLPIDResponse = await alchemy.core.call({
       to: pool,
       data:
@@ -517,10 +520,13 @@ app.get("/buyExact", async (req, res) => {
     const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
     console.log("lp", lp);
     if (selectedLpBuyPrice[lpId] === undefined) {
-      basePrice = lp[0].price;
+      spotPrice = lp[0].spotPrice;
     } else {
-      basePrice = selectedLpBuyPrice[lpId];
+      spotPrice = selectedLpBuyPrice[lpId];
     }
+    priceSum = BigNumber.from(priceSum)
+      .add((spotPrice * (10000 + BigNumber.from(lp[0].fee).toNumber())) / 10000)
+      .toString();
 
     // Add lp with update buy price to min lp
     // Get buy price and add it to the heap
@@ -528,7 +534,7 @@ app.get("/buyExact", async (req, res) => {
       to: lp[0].curve,
       data:
         priceAfterBuyFunctionSig +
-        utils.defaultAbiCoder.encode(["uint256"], [basePrice]).slice(2) +
+        utils.defaultAbiCoder.encode(["uint256"], [spotPrice]).slice(2) +
         utils.defaultAbiCoder
           .encode(["uint256"], [BigNumber.from(lp[0].delta).toString()])
           .slice(2),
@@ -538,11 +544,6 @@ app.get("/buyExact", async (req, res) => {
       .decode(["uint256"], getPriceAfterBuyResponse)[0]
       .toString();
     console.log("nextBuyPrice", nextBuyPrice);
-    priceSum = BigNumber.from(priceSum)
-      .add(
-        (nextBuyPrice * (10000 + BigNumber.from(lp[0].fee).toNumber())) / 10000
-      )
-      .toString();
     selectedLpBuyPrice[lpId] = nextBuyPrice;
   }
 
@@ -560,7 +561,7 @@ app.get("/sell", async (req, res) => {
   const priceAfterSellFunctionSig = "0x6d31f2ca";
   const pool = req.query["pool"];
   var selectedLps = [];
-  var price = 0;
+  var priceSum = 0;
   var firstPrice = 0;
   var lastPrice = 0;
 
@@ -577,11 +578,11 @@ app.get("/sell", async (req, res) => {
       if (BigNumber.from(maxLp.tokenAmount).gte(maxLp.price)) {
         // Store the first price
         if (selectedLps.length === 0) {
-          firstPrice = maxLp.price;
+          firstPrice = maxLp.spotPrice;
         }
         console.log("maxLp", maxLp);
         selectedLps.push(maxLp.id);
-        price = BigNumber.from(maxLp.price).add(price).toString();
+        priceSum = BigNumber.from(maxLp.price).add(priceSum).toString();
 
         // Add lp with update buy price to min lp
         // Get buy price and add it to the heap
@@ -589,7 +590,9 @@ app.get("/sell", async (req, res) => {
           to: maxLp.curve,
           data:
             priceAfterSellFunctionSig +
-            utils.defaultAbiCoder.encode(["uint256"], [maxLp.price]).slice(2) +
+            utils.defaultAbiCoder
+              .encode(["uint256"], [maxLp.spotPrice])
+              .slice(2) +
             utils.defaultAbiCoder
               .encode(["uint256"], [BigNumber.from(maxLp.delta).toString()])
               .slice(2),
@@ -598,10 +601,10 @@ app.get("/sell", async (req, res) => {
         const nextSellPrice = utils.defaultAbiCoder
           .decode(["uint256"], getPriceAfterSellResponse)[0]
           .toString();
-        console.log("nextSellPriddce", nextSellPrice);
+        console.log("nextSellPrice", nextSellPrice);
         maxHeap.push({
           id: maxLp.id,
-          basePrice: nextSellPrice,
+          spotPrice: nextSellPrice,
           price: BigNumber.from(nextSellPrice)
             .mul(10000 - BigNumber.from(maxLp.fee).toNumber())
             .div(10000)
@@ -619,7 +622,7 @@ app.get("/sell", async (req, res) => {
 
     // Store the last price
     if (!maxHeap.isEmpty()) {
-      lastPrice = maxHeap.peek().price;
+      lastPrice = maxHeap.peek().spotPrice;
     }
   }
 
@@ -684,7 +687,6 @@ function poolLiquidityActivitySubscription(pool) {
   };
 
   alchemy.ws.on(addLiquidityPoolActivityFilter, async (log, event) => {
-    const priceAfterBuyFunctionSig = "0xbb1690e2";
     const getLpFunctionSig = "0xcdd3f298";
     const lpId = utils.defaultAbiCoder
       .decode(["uint256"], log.topics[2])[0]
@@ -704,13 +706,13 @@ function poolLiquidityActivitySubscription(pool) {
     const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
     console.log("lp", lp);
 
-    // Get current (sell) price and add it to the max heap
-    const currentPrice = BigNumber.from(lp[0].price).toString();
+    // Get current price and add it to the heaps
+    const spotPrice = BigNumber.from(lp[0].spotPrice).toString();
     console.log("currentPrice", currentPrice);
     maxHeaps[pool].push({
       id: lpId,
-      basePrice: currentPrice,
-      price: BigNumber.from(currentPrice)
+      spotPrice: spotPrice,
+      price: BigNumber.from(spotPrice)
         .mul(10000 - BigNumber.from(lp[0].fee).toNumber())
         .div(10000)
         .toString(),
@@ -721,25 +723,10 @@ function poolLiquidityActivitySubscription(pool) {
       fee: BigNumber.from(lp[0].fee).toString(),
     });
 
-    // Get buy price and add it to the heap
-    const getPriceAfterBuyResponse = await alchemy.core.call({
-      to: lp[0].curve,
-      data:
-        priceAfterBuyFunctionSig +
-        utils.defaultAbiCoder.encode(["uint256"], [currentPrice]).slice(2) +
-        utils.defaultAbiCoder
-          .encode(["uint256"], [BigNumber.from(lp[0].delta).toString()])
-          .slice(2),
-    });
-
-    const buyPrice = utils.defaultAbiCoder
-      .decode(["uint256"], getPriceAfterBuyResponse)[0]
-      .toString();
-    console.log("buyPrice", buyPrice);
     minHeaps[pool].push({
       id: lpId,
-      basePrice: buyPrice,
-      price: BigNumber.from(buyPrice)
+      basePrice: spotPrice,
+      price: BigNumber.from(spotPrice)
         .mul(10000 + BigNumber.from(lp[0].fee).toNumber())
         .div(10000)
         .toString(),
@@ -780,7 +767,6 @@ function poolTradingActivitySubscription(pool) {
   async function updateLPWithLog(log, mode) {
     const getLpFunctionSig = "0xcdd3f298";
     const nftToLpFunctionSig = "0x5460d849";
-    const priceAfterBuyFunctionSig = "0xbb1690e2";
     console.log("log", log);
     // Emitted whenever a new buy / sell is done in a pool
     const iface = new utils.Interface(tradingPoolContract.abi);
@@ -845,15 +831,14 @@ function poolTradingActivitySubscription(pool) {
       const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
       console.log("lp", lp);
 
-      // Get current (sell) price and add it to the max heap
-      const currentPrice = BigNumber.from(lp[0].price).toString();
-      console.log("currentPrice", currentPrice);
+      // Get current price and add it to the heaps
+      const spotPrice = BigNumber.from(lp[0].spotPrice).toString();
+      console.log("spotPrice", spotPrice);
       maxHeaps[pool].push({
         id: lpId,
-        basePrice: currentPrice,
+        spotPrice: spotPrice,
         price:
-          (currentPrice * (10000 - BigNumber.from(lp[0].fee).toString())) /
-          10000,
+          (spotPrice * (10000 - BigNumber.from(lp[0].fee).toString())) / 10000,
         curve: lp[0].curve,
         delta: BigNumber.from(lp[0].delta).toString(),
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
@@ -861,26 +846,11 @@ function poolTradingActivitySubscription(pool) {
         fee: BigNumber.from(lp[0].fee).toString(),
       });
 
-      // Get buy price and add it to the heap
-      const getPriceAfterBuyResponse = await alchemy.core.call({
-        to: lp[0].curve,
-        data:
-          priceAfterBuyFunctionSig +
-          utils.defaultAbiCoder.encode(["uint256"], [currentPrice]).slice(2) +
-          utils.defaultAbiCoder
-            .encode(["uint256"], [BigNumber.from(lp[0].delta).toString()])
-            .slice(2),
-      });
-
-      const buyPrice = utils.defaultAbiCoder
-        .decode(["uint256"], getPriceAfterBuyResponse)[0]
-        .toString();
-      console.log("buyPrice", buyPrice);
       minHeaps[pool].push({
         id: lpId,
-        basePrice: buyPrice,
+        spotPrice: spotPrice,
         price:
-          (buyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
+          (spotPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
         curve: lp[0].curve,
         delta: BigNumber.from(lp[0].delta).toString(),
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
@@ -918,7 +888,6 @@ function poolUserActivitySubscription(pool) {
   // Update LP from logs
   async function updateLPWithLog(log) {
     const getLpFunctionSig = "0xcdd3f298";
-    const priceAfterBuyFunctionSig = "0xbb1690e2";
     // Emitted whenever a new user activity is done in a pool
     const iface = new utils.Interface(tradingPoolContract.abi);
     const decodedLog = iface.parseLog({ data: log.data, topics: log.topics });
@@ -949,13 +918,13 @@ function poolUserActivitySubscription(pool) {
     console.log("lp", lp);
 
     // Get current (sell) price and add it to the max heap
-    const currentPrice = BigNumber.from(lp[0].price).toString();
-    console.log("currentPrice", currentPrice);
+    const spotPrice = BigNumber.from(lp[0].spotPrice).toString();
+    console.log("spotPrice", spotPrice);
     maxHeaps[pool].push({
       id: lpId,
-      basePrice: currentPrice,
+      spotPrice: spotPrice,
       price:
-        (currentPrice * (10000 - BigNumber.from(lp[0].fee).toString())) / 10000,
+        (spotPrice * (10000 - BigNumber.from(lp[0].fee).toString())) / 10000,
       curve: lp[0].curve,
       delta: BigNumber.from(lp[0].delta).toString(),
       tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
@@ -963,26 +932,11 @@ function poolUserActivitySubscription(pool) {
       fee: BigNumber.from(lp[0].fee).toString(),
     });
 
-    // Get buy price and add it to the heap
-    const getPriceAfterBuyResponse = await alchemy.core.call({
-      to: lp[0].curve,
-      data:
-        priceAfterBuyFunctionSig +
-        utils.defaultAbiCoder.encode(["uint256"], [currentPrice]).slice(2) +
-        utils.defaultAbiCoder
-          .encode(["uint256"], [BigNumber.from(lp[0].delta).toString()])
-          .slice(2),
-    });
-
-    const buyPrice = utils.defaultAbiCoder
-      .decode(["uint256"], getPriceAfterBuyResponse)[0]
-      .toString();
-    console.log("buyPrice", buyPrice);
     minHeaps[pool].push({
       id: lpId,
-      basePrice: buyPrice,
+      spotPrice: spotPrice,
       price:
-        (buyPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
+        (spotPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
       curve: lp[0].curve,
       delta: BigNumber.from(lp[0].delta).toString(),
       tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),

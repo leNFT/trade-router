@@ -27,7 +27,6 @@ export async function setInitialState(chainId) {
   const alchemy = new Alchemy(alchemySettings);
 
   // Initial Setup
-  const priceAfterBuyFunctionSig = "0xbb1690e2";
   const getLpFunctionSig = "0xcdd3f298";
 
   // Get all the pools addresses
@@ -125,45 +124,29 @@ export async function setInitialState(chainId) {
       const lp = iface.decodeFunctionResult("getLP", getLpResponse);
       console.log("lp", lp);
 
-      // Get current (sell) price and add it to the max heap
-      const currentPrice = BigNumber.from(lp[0].price).toString();
-      console.log("currentPrice", currentPrice);
+      // Update heaps
+      const spotPrice = BigNumber.from(lp[0].spotPrice).toString();
+      console.log("spotPrice", spotPrice);
       maxHeaps[tradingPool].push({
         id: lpId,
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
         nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
-        basePrice: currentPrice,
-        price: BigNumber.from(currentPrice)
+        spotPrice: spotPrice,
+        price: BigNumber.from(spotPrice)
           .mul(10000 - BigNumber.from(lp[0].fee).toNumber())
           .div(10000)
           .toString(),
-
         curve: lp[0].curve,
         delta: BigNumber.from(lp[0].delta).toString(),
         fee: BigNumber.from(lp[0].fee).toString(),
       });
 
-      // Get buy price and add it to the heap
-      const getPriceAfterBuyResponse = await alchemy.core.call({
-        to: lp[0].curve,
-        data:
-          priceAfterBuyFunctionSig +
-          utils.defaultAbiCoder.encode(["uint256"], [currentPrice]).slice(2) +
-          utils.defaultAbiCoder
-            .encode(["uint256"], [BigNumber.from(lp[0].delta).toString()])
-            .slice(2),
-      });
-
-      const buyPrice = utils.defaultAbiCoder
-        .decode(["uint256"], getPriceAfterBuyResponse)[0]
-        .toString();
-      console.log("buyPrice", buyPrice);
       minHeaps[tradingPool].push({
         id: lpId,
         tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
         nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
-        basePrice: buyPrice,
-        price: BigNumber.from(buyPrice)
+        spotPrice: spotPrice,
+        price: BigNumber.from(spotPrice)
           .mul(10000 + BigNumber.from(lp[0].fee).toNumber())
           .div(10000)
           .toString(),
