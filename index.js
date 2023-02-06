@@ -628,7 +628,7 @@ app.get("/sell", async (req, res) => {
 
   res.send({
     lps: selectedLps,
-    price: price,
+    price: priceSum,
     priceImpact: firstPrice
       ? Math.floor(
           BigNumber.from(firstPrice)
