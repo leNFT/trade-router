@@ -183,12 +183,13 @@ app.get("/swap", async (req, res) => {
         const nextBuyPrice = utils.defaultAbiCoder
           .decode(["uint256"], getPriceAfterBuyResponse)[0]
           .toString();
+        console.log("minLp", minLp);
         console.log("nextBuyPrice", nextBuyPrice);
         minHeap.push({
           id: minLp.id,
           spotPrice: nextBuyPrice,
           price: BigNumber.from(nextBuyPrice)
-            .mul(10000 + BigNumber(minLp.fee).toNumber())
+            .mul(10000 + BigNumber.from(minLp.fee).toNumber())
             .div(10000)
             .toString(),
           curve: minLp.curve,
