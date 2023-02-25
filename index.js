@@ -44,6 +44,342 @@ tradingPools.forEach((pool) => {
   poolUserActivitySubscription(pool);
 });
 
+function createNewTradingPoolSubscription() {
+  // Create a websocket to listen for new pools
+  const newTradingPoolsFilter = {
+    address: addresses.TradingPoolFactory,
+    topics: [utils.id("CreateTradingPool(address,address,address)")],
+  };
+
+  alchemy.ws.on(newTradingPoolsFilter, (log, event) => {
+    // Emitted whenever a new trading pool is created
+    const tradingPool = utils.defaultAbiCoder.decode(
+      ["address"],
+      log.topics[1]
+    )[0];
+
+    tradingPools.push(tradingPool);
+    maxHeaps[tradingPool] = new Heap(maxPriceComparator);
+    minHeaps[tradingPool] = new Heap(minPriceComparator);
+
+    // Subscribe to the new trading pool activites
+    poolTradingActivitySubscription(tradingPool);
+    poolLiquidityActivitySubscription(tradingPool);
+
+    console.log("Got new trading pool: ", tradingPool);
+  });
+
+  console.log("Set up new trading pools filter");
+}
+
+function poolLiquidityActivitySubscription(pool) {
+  console.log("Creating liquidity activity subscription for ", pool);
+
+  // Create a websocket to listen to a pools activity
+  const addLiquidityPoolActivityFilter = {
+    address: pool,
+    topics: [
+      utils.id(
+        "AddLiquidity(address,uint256,uint256[],uint256,uint256,address,uint256,uint256)"
+      ),
+    ],
+  };
+  const removeLiquidityPoolActivityFilter = {
+    address: pool,
+    topics: [utils.id("RemoveLiquidity(address,uint256)")],
+  };
+
+  alchemy.ws.on(addLiquidityPoolActivityFilter, async (log, event) => {
+    const getLpFunctionSig = "0xcdd3f298";
+    const lpId = utils.defaultAbiCoder
+      .decode(["uint256"], log.topics[2])[0]
+      .toNumber();
+
+    // If a user is doing a buying operation
+    console.log("Got new add liquidity, lpId:", lpId);
+    console.log("pool:", pool);
+    const getNewLpResponse = await alchemy.core.call({
+      to: pool,
+      data:
+        getLpFunctionSig +
+        utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
+    });
+
+    const iface = new utils.Interface(tradingPoolContract.abi);
+    const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
+    console.log("lp", lp);
+
+    // Get current price and add it to the heaps
+    const spotPrice = BigNumber.from(lp[0].spotPrice).toString();
+    console.log("currentPrice", currentPrice);
+    maxHeaps[pool].push({
+      id: lpId,
+      spotPrice: spotPrice,
+      price: BigNumber.from(spotPrice)
+        .mul(10000 - BigNumber.from(lp[0].fee).toNumber())
+        .div(10000)
+        .toString(),
+      curve: lp[0].curve,
+      delta: BigNumber.from(lp[0].delta).toString(),
+      tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
+      nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+      fee: BigNumber.from(lp[0].fee).toString(),
+    });
+
+    minHeaps[pool].push({
+      id: lpId,
+      basePrice: spotPrice,
+      price: BigNumber.from(spotPrice)
+        .mul(10000 + BigNumber.from(lp[0].fee).toNumber())
+        .div(10000)
+        .toString(),
+      curve: lp[0].curve,
+      delta: BigNumber.from(lp[0].delta).toString(),
+      tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
+      nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+      fee: BigNumber.from(lp[0].fee).toString(),
+    });
+
+    console.log("addedliquidity. maxHeaps:", maxHeaps[pool].heapArray);
+  });
+
+  alchemy.ws.on(removeLiquidityPoolActivityFilter, async (log, event) => {
+    const lpId = utils.defaultAbiCoder
+      .decode(["uint256"], log.topics[2])[0]
+      .toNumber();
+
+    // If a user is doing a selling operation
+    console.log("Got new remove liquidity");
+
+    // Find LPs in heaps' liquidity positions
+    const nftMaxHeapLpIndex = maxHeaps[pool].heapArray.findIndex(
+      (el) => el.id == lpId
+    );
+    const nftMinHeapLpIndex = minHeaps[pool].heapArray.findIndex(
+      (el) => el.id == lpId
+    );
+    maxHeaps[pool].remove(maxHeaps[pool].heapArray[nftMaxHeapLpIndex]);
+    minHeaps[pool].remove(minHeaps[pool].heapArray[nftMinHeapLpIndex]);
+  });
+}
+
+function poolTradingActivitySubscription(pool) {
+  console.log("Creating trading activity subscription for ", pool);
+
+  // Update LP from logs
+  async function updateLPWithLog(log, mode) {
+    const getLpFunctionSig = "0xcdd3f298";
+    const nftToLpFunctionSig = "0x5460d849";
+    console.log("log", log);
+    // Emitted whenever a new buy / sell is done in a pool
+    const iface = new utils.Interface(tradingPoolContract.abi);
+    const decodedLog = iface.parseLog({ data: log.data, topics: log.topics });
+    console.log("decodedLog", decodedLog);
+    var nfts = decodedLog.args.nftIds;
+    console.log("NFTs: ", nfts);
+
+    // Find all the LPs we need to update
+    var updatedLps = [];
+    for (let index = 0; index < nfts.length; index++) {
+      var nftLP;
+      const nft = BigNumber.from(nfts[index]).toNumber();
+      console.log("nft", nft);
+      if (mode == "buy") {
+        const nftMaxHeapNFTIndex = maxHeaps[pool].heapArray.findIndex(
+          (el) => el.nfts.includes(nft) == true
+        );
+        console.log("nftMaxHeapNFTIndex", nftMaxHeapNFTIndex);
+        console.log("maxHeaps[pool].heapArray", maxHeaps[pool].heapArray);
+        nftLP = maxHeaps[pool].heapArray[nftMaxHeapNFTIndex].id;
+      } else if (mode == "sell") {
+        // Get the lp where the nfts went to
+        const nftToLpResponse = await alchemy.core.call({
+          to: pool,
+          data:
+            nftToLpFunctionSig +
+            utils.defaultAbiCoder.encode(["uint256"], [nft]).slice(2),
+        });
+        nftLP = iface
+          .decodeFunctionResult("nftToLp", nftToLpResponse)[0]
+          .toNumber();
+      }
+      console.log("nftLP", nftLP);
+      if (!updatedLps.includes(nftLP)) {
+        console.log("add LP's NFT to the LP list: ", nftLP);
+        updatedLps.push(nftLP);
+      }
+    }
+
+    // Update every changed LP
+    for (let index = 0; index < updatedLps.length; index++) {
+      const lpId = updatedLps[index];
+
+      // Find LPs in heaps' liquidity positions
+      const nftMaxHeapLpIndex = maxHeaps[pool].heapArray.findIndex(
+        (el) => el.id == lpId
+      );
+      const nftMinHeapLpIndex = minHeaps[pool].heapArray.findIndex(
+        (el) => el.id == lpId
+      );
+      maxHeaps[pool].remove(maxHeaps[pool].heapArray[nftMaxHeapLpIndex]);
+      minHeaps[pool].remove(minHeaps[pool].heapArray[nftMinHeapLpIndex]);
+
+      const getNewLpResponse = await alchemy.core.call({
+        to: pool,
+        data:
+          getLpFunctionSig +
+          utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
+      });
+
+      const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
+      console.log("lp", lp);
+
+      // Get current price and add it to the heaps
+      const spotPrice = BigNumber.from(lp[0].spotPrice).toString();
+      console.log("spotPrice", spotPrice);
+      maxHeaps[pool].push({
+        id: lpId,
+        spotPrice: spotPrice,
+        price:
+          (spotPrice * (10000 - BigNumber.from(lp[0].fee).toString())) / 10000,
+        curve: lp[0].curve,
+        delta: BigNumber.from(lp[0].delta).toString(),
+        tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
+        nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+        fee: BigNumber.from(lp[0].fee).toString(),
+      });
+
+      minHeaps[pool].push({
+        id: lpId,
+        spotPrice: spotPrice,
+        price:
+          (spotPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
+        curve: lp[0].curve,
+        delta: BigNumber.from(lp[0].delta).toString(),
+        tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
+        nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+        fee: BigNumber.from(lp[0].fee).toString(),
+      });
+    }
+  }
+
+  // Create two websocket to listen to a pools activity (buy and sell)
+  const buyPoolActivityFilter = {
+    address: pool,
+    topics: [utils.id("Buy(address,uint256[],uint256)")],
+  };
+
+  const sellPoolActivityFilter = {
+    address: pool,
+    topics: [utils.id("Sell(address,uint256[],uint256)")],
+  };
+
+  alchemy.ws.on(sellPoolActivityFilter, async (log, event) => {
+    console.log("Got new selling swap");
+    await updateLPWithLog(log, "sell");
+  });
+
+  alchemy.ws.on(buyPoolActivityFilter, async (log, event) => {
+    console.log("Got new buying swap");
+    await updateLPWithLog(log, "buy");
+  });
+}
+
+function poolUserActivitySubscription(pool) {
+  console.log("Creating trading activity subscription for ", pool);
+
+  // Update LP from logs
+  async function updateLPWithLog(log) {
+    const getLpFunctionSig = "0xcdd3f298";
+    // Emitted whenever a new user activity is done in a pool
+    const iface = new utils.Interface(tradingPoolContract.abi);
+    const decodedLog = iface.parseLog({ data: log.data, topics: log.topics });
+    console.log("decodedLog", decodedLog);
+    const lpId = decodedLog.args.lpId;
+    console.log("lpId: ", lpId);
+
+    // Find LP in heaps' liquidity positions
+    const nftMaxHeapLpIndex = maxHeaps[pool].heapArray.findIndex(
+      (el) => el.id == lpId
+    );
+    const nftMinHeapLpIndex = minHeaps[pool].heapArray.findIndex(
+      (el) => el.id == lpId
+    );
+
+    // Remove LP from heaps
+    maxHeaps[pool].remove(maxHeaps[pool].heapArray[nftMaxHeapLpIndex]);
+    minHeaps[pool].remove(minHeaps[pool].heapArray[nftMinHeapLpIndex]);
+
+    const getNewLpResponse = await alchemy.core.call({
+      to: pool,
+      data:
+        getLpFunctionSig +
+        utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
+    });
+
+    const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
+    console.log("lp", lp);
+
+    // Get current (sell) price and add it to the max heap
+    const spotPrice = BigNumber.from(lp[0].spotPrice).toString();
+    console.log("spotPrice", spotPrice);
+    maxHeaps[pool].push({
+      id: lpId,
+      spotPrice: spotPrice,
+      price:
+        (spotPrice * (10000 - BigNumber.from(lp[0].fee).toString())) / 10000,
+      curve: lp[0].curve,
+      delta: BigNumber.from(lp[0].delta).toString(),
+      tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
+      nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+      fee: BigNumber.from(lp[0].fee).toString(),
+    });
+
+    minHeaps[pool].push({
+      id: lpId,
+      spotPrice: spotPrice,
+      price:
+        (spotPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
+      curve: lp[0].curve,
+      delta: BigNumber.from(lp[0].delta).toString(),
+      tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
+      nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
+      fee: BigNumber.from(lp[0].fee).toString(),
+    });
+  }
+
+  // Create two websocket to listen to a pools activity (buy and sell)
+  const setLpPricingCurveActivityFilter = {
+    address: pool,
+    topics: [utils.id("SetLpPricingCurve(address,uint256,address,uint256)")],
+  };
+
+  const setLpPriceActivityFilter = {
+    address: pool,
+    topics: [utils.id("SetLpPrice(address,uint256,uint256)")],
+  };
+
+  const setLpFeeActivityFilter = {
+    address: pool,
+    topics: [utils.id("SetLpFee(address,uint256,uint256)")],
+  };
+
+  alchemy.ws.on(setLpPricingCurveActivityFilter, async (log, event) => {
+    console.log("Got new lp edit pricing curve activity");
+    await updateLPWithLog(log);
+  });
+
+  alchemy.ws.on(setLpPriceActivityFilter, async (log, event) => {
+    console.log("Got new lp edit price activity");
+    await updateLPWithLog(log);
+  });
+
+  alchemy.ws.on(setLpFeeActivityFilter, async (log, event) => {
+    console.log("Got new lp edit fee activity");
+    await updateLPWithLog(log);
+  });
+}
+
 // Setup swap router endpoint
 app.get("/swap", async (req, res) => {
   // Run cors
@@ -642,341 +978,29 @@ app.get("/sell", async (req, res) => {
   });
 });
 
-function createNewTradingPoolSubscription() {
-  // Create a websocket to listen for new pools
-  const newTradingPoolsFilter = {
-    address: addresses.TradingPoolFactory,
-    topics: [utils.id("CreateTradingPool(address,address,address)")],
-  };
+// Setup price info endpoint
+app.get("/price", async (req, res) => {
+  // Run cors
+  await cors(req, res);
+  const pool = req.query["pool"];
+  var buyPrice = "0";
+  var sellPrice = "0";
 
-  alchemy.ws.on(newTradingPoolsFilter, (log, event) => {
-    // Emitted whenever a new trading pool is created
-    const tradingPool = utils.defaultAbiCoder.decode(
-      ["address"],
-      log.topics[1]
-    )[0];
-
-    tradingPools.push(tradingPool);
-    maxHeaps[tradingPool] = new Heap(maxPriceComparator);
-    minHeaps[tradingPool] = new Heap(minPriceComparator);
-
-    // Subscribe to the new trading pool activites
-    poolTradingActivitySubscription(tradingPool);
-    poolLiquidityActivitySubscription(tradingPool);
-
-    console.log("Got new trading pool: ", tradingPool);
-  });
-
-  console.log("Set up new trading pools filter");
-}
-
-function poolLiquidityActivitySubscription(pool) {
-  console.log("Creating liquidity activity subscription for ", pool);
-
-  // Create a websocket to listen to a pools activity
-  const addLiquidityPoolActivityFilter = {
-    address: pool,
-    topics: [
-      utils.id(
-        "AddLiquidity(address,uint256,uint256[],uint256,uint256,address,uint256,uint256)"
-      ),
-    ],
-  };
-  const removeLiquidityPoolActivityFilter = {
-    address: pool,
-    topics: [utils.id("RemoveLiquidity(address,uint256)")],
-  };
-
-  alchemy.ws.on(addLiquidityPoolActivityFilter, async (log, event) => {
-    const getLpFunctionSig = "0xcdd3f298";
-    const lpId = utils.defaultAbiCoder
-      .decode(["uint256"], log.topics[2])[0]
-      .toNumber();
-
-    // If a user is doing a buying operation
-    console.log("Got new add liquidity, lpId:", lpId);
-    console.log("pool:", pool);
-    const getNewLpResponse = await alchemy.core.call({
-      to: pool,
-      data:
-        getLpFunctionSig +
-        utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
-    });
-
-    const iface = new utils.Interface(tradingPoolContract.abi);
-    const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
-    console.log("lp", lp);
-
-    // Get current price and add it to the heaps
-    const spotPrice = BigNumber.from(lp[0].spotPrice).toString();
-    console.log("currentPrice", currentPrice);
-    maxHeaps[pool].push({
-      id: lpId,
-      spotPrice: spotPrice,
-      price: BigNumber.from(spotPrice)
-        .mul(10000 - BigNumber.from(lp[0].fee).toNumber())
-        .div(10000)
-        .toString(),
-      curve: lp[0].curve,
-      delta: BigNumber.from(lp[0].delta).toString(),
-      tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
-      nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
-      fee: BigNumber.from(lp[0].fee).toString(),
-    });
-
-    minHeaps[pool].push({
-      id: lpId,
-      basePrice: spotPrice,
-      price: BigNumber.from(spotPrice)
-        .mul(10000 + BigNumber.from(lp[0].fee).toNumber())
-        .div(10000)
-        .toString(),
-      curve: lp[0].curve,
-      delta: BigNumber.from(lp[0].delta).toString(),
-      tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
-      nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
-      fee: BigNumber.from(lp[0].fee).toString(),
-    });
-
-    console.log("addedliquidity. maxHeaps:", maxHeaps[pool].heapArray);
-  });
-
-  alchemy.ws.on(removeLiquidityPoolActivityFilter, async (log, event) => {
-    const lpId = utils.defaultAbiCoder
-      .decode(["uint256"], log.topics[2])[0]
-      .toNumber();
-
-    // If a user is doing a selling operation
-    console.log("Got new remove liquidity");
-
-    // Find LPs in heaps' liquidity positions
-    const nftMaxHeapLpIndex = maxHeaps[pool].heapArray.findIndex(
-      (el) => el.id == lpId
-    );
-    const nftMinHeapLpIndex = minHeaps[pool].heapArray.findIndex(
-      (el) => el.id == lpId
-    );
-    maxHeaps[pool].remove(maxHeaps[pool].heapArray[nftMaxHeapLpIndex]);
-    minHeaps[pool].remove(minHeaps[pool].heapArray[nftMinHeapLpIndex]);
-  });
-}
-
-function poolTradingActivitySubscription(pool) {
-  console.log("Creating trading activity subscription for ", pool);
-
-  // Update LP from logs
-  async function updateLPWithLog(log, mode) {
-    const getLpFunctionSig = "0xcdd3f298";
-    const nftToLpFunctionSig = "0x5460d849";
-    console.log("log", log);
-    // Emitted whenever a new buy / sell is done in a pool
-    const iface = new utils.Interface(tradingPoolContract.abi);
-    const decodedLog = iface.parseLog({ data: log.data, topics: log.topics });
-    console.log("decodedLog", decodedLog);
-    var nfts = decodedLog.args.nftIds;
-    console.log("NFTs: ", nfts);
-
-    // Find all the LPs we need to update
-    var updatedLps = [];
-    for (let index = 0; index < nfts.length; index++) {
-      var nftLP;
-      const nft = BigNumber.from(nfts[index]).toNumber();
-      console.log("nft", nft);
-      if (mode == "buy") {
-        const nftMaxHeapNFTIndex = maxHeaps[pool].heapArray.findIndex(
-          (el) => el.nfts.includes(nft) == true
-        );
-        console.log("nftMaxHeapNFTIndex", nftMaxHeapNFTIndex);
-        console.log("maxHeaps[pool].heapArray", maxHeaps[pool].heapArray);
-        nftLP = maxHeaps[pool].heapArray[nftMaxHeapNFTIndex].id;
-      } else if (mode == "sell") {
-        // Get the lp where the nfts went to
-        const nftToLpResponse = await alchemy.core.call({
-          to: pool,
-          data:
-            nftToLpFunctionSig +
-            utils.defaultAbiCoder.encode(["uint256"], [nft]).slice(2),
-        });
-        nftLP = iface
-          .decodeFunctionResult("nftToLp", nftToLpResponse)[0]
-          .toNumber();
-      }
-      console.log("nftLP", nftLP);
-      if (!updatedLps.includes(nftLP)) {
-        console.log("add LP's NFT to the LP list: ", nftLP);
-        updatedLps.push(nftLP);
-      }
-    }
-
-    // Update every changed LP
-    for (let index = 0; index < updatedLps.length; index++) {
-      const lpId = updatedLps[index];
-
-      // Find LPs in heaps' liquidity positions
-      const nftMaxHeapLpIndex = maxHeaps[pool].heapArray.findIndex(
-        (el) => el.id == lpId
-      );
-      const nftMinHeapLpIndex = minHeaps[pool].heapArray.findIndex(
-        (el) => el.id == lpId
-      );
-      maxHeaps[pool].remove(maxHeaps[pool].heapArray[nftMaxHeapLpIndex]);
-      minHeaps[pool].remove(minHeaps[pool].heapArray[nftMinHeapLpIndex]);
-
-      const getNewLpResponse = await alchemy.core.call({
-        to: pool,
-        data:
-          getLpFunctionSig +
-          utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
-      });
-
-      const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
-      console.log("lp", lp);
-
-      // Get current price and add it to the heaps
-      const spotPrice = BigNumber.from(lp[0].spotPrice).toString();
-      console.log("spotPrice", spotPrice);
-      maxHeaps[pool].push({
-        id: lpId,
-        spotPrice: spotPrice,
-        price:
-          (spotPrice * (10000 - BigNumber.from(lp[0].fee).toString())) / 10000,
-        curve: lp[0].curve,
-        delta: BigNumber.from(lp[0].delta).toString(),
-        tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
-        nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
-        fee: BigNumber.from(lp[0].fee).toString(),
-      });
-
-      minHeaps[pool].push({
-        id: lpId,
-        spotPrice: spotPrice,
-        price:
-          (spotPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
-        curve: lp[0].curve,
-        delta: BigNumber.from(lp[0].delta).toString(),
-        tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
-        nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
-        fee: BigNumber.from(lp[0].fee).toString(),
-      });
-    }
+  const maxLp = maxHeaps[pool].peek();
+  if (maxLp !== undefined) {
+    sellPrice = maxLp.price;
   }
 
-  // Create two websocket to listen to a pools activity (buy and sell)
-  const buyPoolActivityFilter = {
-    address: pool,
-    topics: [utils.id("Buy(address,uint256[],uint256)")],
-  };
-
-  const sellPoolActivityFilter = {
-    address: pool,
-    topics: [utils.id("Sell(address,uint256[],uint256)")],
-  };
-
-  alchemy.ws.on(sellPoolActivityFilter, async (log, event) => {
-    console.log("Got new selling swap");
-    await updateLPWithLog(log, "sell");
-  });
-
-  alchemy.ws.on(buyPoolActivityFilter, async (log, event) => {
-    console.log("Got new buying swap");
-    await updateLPWithLog(log, "buy");
-  });
-}
-
-function poolUserActivitySubscription(pool) {
-  console.log("Creating trading activity subscription for ", pool);
-
-  // Update LP from logs
-  async function updateLPWithLog(log) {
-    const getLpFunctionSig = "0xcdd3f298";
-    // Emitted whenever a new user activity is done in a pool
-    const iface = new utils.Interface(tradingPoolContract.abi);
-    const decodedLog = iface.parseLog({ data: log.data, topics: log.topics });
-    console.log("decodedLog", decodedLog);
-    const lpId = decodedLog.args.lpId;
-    console.log("lpId: ", lpId);
-
-    // Find LP in heaps' liquidity positions
-    const nftMaxHeapLpIndex = maxHeaps[pool].heapArray.findIndex(
-      (el) => el.id == lpId
-    );
-    const nftMinHeapLpIndex = minHeaps[pool].heapArray.findIndex(
-      (el) => el.id == lpId
-    );
-
-    // Remove LP from heaps
-    maxHeaps[pool].remove(maxHeaps[pool].heapArray[nftMaxHeapLpIndex]);
-    minHeaps[pool].remove(minHeaps[pool].heapArray[nftMinHeapLpIndex]);
-
-    const getNewLpResponse = await alchemy.core.call({
-      to: pool,
-      data:
-        getLpFunctionSig +
-        utils.defaultAbiCoder.encode(["uint256"], [lpId]).slice(2),
-    });
-
-    const lp = iface.decodeFunctionResult("getLP", getNewLpResponse);
-    console.log("lp", lp);
-
-    // Get current (sell) price and add it to the max heap
-    const spotPrice = BigNumber.from(lp[0].spotPrice).toString();
-    console.log("spotPrice", spotPrice);
-    maxHeaps[pool].push({
-      id: lpId,
-      spotPrice: spotPrice,
-      price:
-        (spotPrice * (10000 - BigNumber.from(lp[0].fee).toString())) / 10000,
-      curve: lp[0].curve,
-      delta: BigNumber.from(lp[0].delta).toString(),
-      tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
-      nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
-      fee: BigNumber.from(lp[0].fee).toString(),
-    });
-
-    minHeaps[pool].push({
-      id: lpId,
-      spotPrice: spotPrice,
-      price:
-        (spotPrice * (10000 + BigNumber.from(lp[0].fee).toString())) / 10000,
-      curve: lp[0].curve,
-      delta: BigNumber.from(lp[0].delta).toString(),
-      tokenAmount: BigNumber.from(lp[0].tokenAmount).toString(),
-      nfts: lp[0].nftIds.map((x) => BigNumber.from(x).toNumber()),
-      fee: BigNumber.from(lp[0].fee).toString(),
-    });
+  const minLp = minHeaps[pool].peek();
+  if (minLp !== undefined) {
+    buyPrice = minLp.price;
   }
 
-  // Create two websocket to listen to a pools activity (buy and sell)
-  const setLpPricingCurveActivityFilter = {
-    address: pool,
-    topics: [utils.id("SetLpPricingCurve(address,uint256,address,uint256)")],
-  };
-
-  const setLpPriceActivityFilter = {
-    address: pool,
-    topics: [utils.id("SetLpPrice(address,uint256,uint256)")],
-  };
-
-  const setLpFeeActivityFilter = {
-    address: pool,
-    topics: [utils.id("SetLpFee(address,uint256,uint256)")],
-  };
-
-  alchemy.ws.on(setLpPricingCurveActivityFilter, async (log, event) => {
-    console.log("Got new lp edit pricing curve activity");
-    await updateLPWithLog(log);
+  res.send({
+    buyPrice: buyPrice,
+    sellPrice: sellPrice,
   });
-
-  alchemy.ws.on(setLpPriceActivityFilter, async (log, event) => {
-    console.log("Got new lp edit price activity");
-    await updateLPWithLog(log);
-  });
-
-  alchemy.ws.on(setLpFeeActivityFilter, async (log, event) => {
-    console.log("Got new lp edit fee activity");
-    await updateLPWithLog(log);
-  });
-}
+});
 
 // Listen to new connections
 app.listen(port, () => {
