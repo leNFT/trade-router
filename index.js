@@ -985,16 +985,17 @@ app.get("/price", async (req, res) => {
   const pool = req.query["pool"];
   var buyPrice = "0";
   var sellPrice = "0";
+  console.log("Getting pool price", pool);
 
-  const maxLp = maxHeaps[pool].peek();
-  if (maxLp !== undefined) {
-    sellPrice = maxLp.price;
+  if (maxHeaps[pool] !== undefined) {
+    sellPrice = maxHeaps[pool].peek().price;
   }
 
-  const minLp = minHeaps[pool].peek();
-  if (minLp !== undefined) {
-    buyPrice = minLp.price;
+  if (minHeaps[pool] !== undefined) {
+    buyPrice = minHeaps[pool].peek().price;
   }
+
+  console.log("Getting pool price", pool);
 
   res.send({
     buyPrice: buyPrice.toString(),
