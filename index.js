@@ -997,8 +997,8 @@ app.get("/price", async (req, res) => {
   }
 
   res.send({
-    buyPrice: buyPrice,
-    sellPrice: sellPrice,
+    buyPrice: buyPrice.toString(),
+    sellPrice: sellPrice.toString(),
   });
 });
 
