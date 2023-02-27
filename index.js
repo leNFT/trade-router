@@ -111,7 +111,6 @@ function poolLiquidityActivitySubscription(pool) {
 
     // Get current price and add it to the heaps
     const spotPrice = BigNumber.from(lp[0].spotPrice).toString();
-    console.log("currentPrice", currentPrice);
     maxHeaps[pool].push({
       id: lpId,
       spotPrice: spotPrice,
